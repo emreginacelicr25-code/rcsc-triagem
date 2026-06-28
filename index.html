@@ -321,9 +321,10 @@ function renderD(){
   cont.innerHTML=L.map(d=>{
     const al=d.aluno_nome?`<div style="font-size:.8rem;color:var(--verde2);font-weight:600;margin-bottom:5px">👨‍🎓 ${e(d.aluno_nome)}${d.aluno_turma?' · '+e(d.aluno_turma):''}</div>`:'';
     const pd=pD.includes(d.categoria);
+        const docIcon=d.doc_gerado?'<span title="Documento já gerado" style="font-size:.8rem;color:var(--verde2)">📄✓</span>':''
     return`<div class="card ${d.urgencia} ${d.status}">
       <div class="ch"><div><div class="ca">${e(d.autor)}</div><div class="cw">${e(d.data_msg||d.criado_em?.slice(0,10)||'')} ${e(d.hora_msg||d.criado_em?.slice(11,16)||'')} · ${e(d.origem)}</div></div>
-      <div class="chips"><span class="chip ${d.urgencia}">${d.urgencia==='alta'?'🔴 Alta':d.urgencia==='media'?'🟡 Média':'🟢 Baixa'}</span><span class="chip cat">${e(d.categoria)}</span><span class="chip ${d.status}">${d.status==='aberto'?'Aberto':d.status==='em_andamento'?'Em andamento':'✓ Concluído'}</span></div></div>
+      <div class="chips"><span class="chip ${d.urgencia}">${d.urgencia==='alta'?'🔴 Alta':d.urgencia==='media'?'🟡 Média':'🟢 Baixa'}</span><span class="chip cat">${e(d.categoria)}</span><span class="chip ${d.status}">${d.status==='aberto'?'Aberto':d.status==='em_andamento'?'Em andamento':'✓ Concluído'}</span>${docIcon}</div></div>
       ${al}<div class="ctxt" onclick="this.classList.toggle('exp')">${e(d.texto)}</div>
       <div class="cact">
         <select class="sm" style="border:1px solid var(--line);border-radius:6px;background:#fff;font:inherit;cursor:pointer;padding:5px 8px" onchange="altSt('${d.id}',this.value)">
@@ -350,7 +351,15 @@ function limparF(){['fA','fO','fTx','fAl','fTm','fEn'].forEach(id=>{const el=g(i
   g('fD').value=new Date().toISOString().slice(0,10);g('fH').value=new Date().toTimeString().slice(0,5);selUv('media');}
 
 async function altSt(id,st){
-  try{await db('demandas','PATCH',{status:st},`?id=eq.${id}`);const d=DD.find(x=>x.id===id);if(d)d.status=st;stats();renderD();toast('Status atualizado');}catch(ex){toast('Erro: '+ex.message);}
+  try{
+    await db('demandas','PATCH',{status:st},`?id=eq.${id}`);
+    const d=DD.find(x=>x.id===id);if(d)d.status=st;
+    await db('historico_demandas','POST',{
+      demanda_id:id, acao:'Status alterado para: '+st, usuario:'secretaria',
+      detalhe:new Date().toLocaleString('pt-BR')
+    });
+    stats();renderD();toast('Status atualizado');
+  }catch(ex){toast('Erro: '+ex.message);}
 }
 async function delD(id){if(!confirm('Excluir esta demanda?'))return;try{await db('demandas','DELETE',null,`?id=eq.${id}`);DD=DD.filter(d=>d.id!==id);stats();renderD();toast('Excluída');}catch(ex){toast('Erro: '+ex.message);}}
 
@@ -368,15 +377,43 @@ function abrirD(id){
       <div class="f"><label>Turma</label><input id="dTm" value="${e(d.aluno_turma||'')}"></div>
       <div class="f full"><label>Encaminhamentos</label><textarea id="dEn" style="min-height:80px">${e(d.encaminhamentos||'')}</textarea></div>
       <div class="f full"><label>Observações</label><textarea id="dOb" style="min-height:60px">${e(d.observacoes||'')}</textarea></div>
+    </div>
+    <div style="margin-top:20px">
+      <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#556;margin-bottom:8px">📋 Histórico de ações</div>
+      <div id="hist-${id}" style="background:var(--paper);border-radius:8px;padding:10px 14px;min-height:40px">
+        <div style="color:#778;font-size:.82rem;font-style:italic">Carregando...</div>
+      </div>
     </div>`;
+  // Buscar histórico da demanda
+  let histHtml = '<div style="color:#778;font-size:.85rem;padding:10px 0">Carregando histórico...</div>';
   g('mFoot').innerHTML=`<button class="bs" onclick="fecharM()">Fechar</button><button class="bp" onclick="salvarEd('${id}')">💾 Salvar</button>`;
+  // Carregar histórico assíncrono
+  db('historico_demandas','GET',null,`?demanda_id=eq.${id}&order=criado_em.desc`).then(hist=>{
+    const hEl = document.getElementById('hist-${id}');
+    if(!hEl) return;
+    if(!hist||!hist.length){hEl.innerHTML='<div style="color:#778;font-size:.82rem;font-style:italic">Nenhum histórico ainda.</div>';return;}
+    hEl.innerHTML = hist.map(h=>`
+      <div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:.82rem">
+        <div style="font-weight:700;color:var(--verde2)">${h.acao}</div>
+        <div style="color:#778;font-size:.75rem">${new Date(h.criado_em).toLocaleString('pt-BR')} ${h.detalhe?'· '+h.detalhe:''}</div>
+      </div>`).join('');
+  }).catch(()=>{});
   g('mBg').classList.add('open');
 }
 async function salvarEd(id){
   const u={autor:g('dA').value,origem:g('dO').value,data_msg:g('dD').value,hora_msg:g('dH').value,
     texto:g('dTx').value,aluno_nome:g('dAl').value,aluno_turma:g('dTm').value,
     encaminhamentos:g('dEn').value,observacoes:g('dOb').value};
-  try{await db('demandas','PATCH',u,`?id=eq.${id}`);Object.assign(DD.find(d=>d.id===id)||{},u);renderD();fecharM();toast('✅ Salvo!');}catch(ex){toast('Erro: '+ex.message);}
+  try{
+    await db('demandas','PATCH',u,`?id=eq.${id}`);
+    Object.assign(DD.find(d=>d.id===id)||{},u);
+    // Registrar edição no histórico
+    await db('historico_demandas','POST',{
+      demanda_id:id, acao:'Demanda editada', usuario:'secretaria',
+      detalhe:'Encaminhamentos e dados atualizados em '+new Date().toLocaleString('pt-BR')
+    });
+    renderD();fecharM();toast('✅ Salvo!');
+  }catch(ex){toast('Erro: '+ex.message);}
 }
 
 async function salvarA(){
@@ -510,6 +547,27 @@ function gerarDoc(id){
   </div><div class="dp" id="docP">${ht}</div>`;
   g('mFoot').innerHTML=`<button class="bs" onclick="fecharM()">Fechar</button><button class="bp" onclick="window.print()">🖨 Imprimir / PDF</button>`;
   g('mBg').classList.add('open');
+  // Registrar geração do documento no Supabase
+  registrarDocGerado(id, ti);
+}
+
+async function registrarDocGerado(id, tipoDoc){
+  try{
+    // Marcar a demanda como tendo documento gerado
+    await db('demandas','PATCH',{doc_gerado:true},`?id=eq.${id}`);
+    // Salvar no histórico
+    await db('historico_demandas','POST',{
+      demanda_id: id,
+      acao: 'Documento gerado',
+      usuario: 'secretaria',
+      detalhe: tipoDoc + ' — gerado em ' + new Date().toLocaleString('pt-BR')
+    });
+    // Atualizar localmente
+    const d = DD.find(x=>x.id===id);
+    if(d) d.doc_gerado = true;
+  }catch(ex){
+    console.warn('Erro ao registrar documento:', ex.message);
+  }
 }
 
 function e(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
