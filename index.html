@@ -344,6 +344,7 @@ function renderD(){
   cont.innerHTML=L.map(d=>{
     const al=d.aluno_nome?`<div style="font-size:.8rem;color:var(--verde2);font-weight:600;margin-bottom:5px">👨‍🎓 ${e(d.aluno_nome)}${d.aluno_turma?' · '+e(d.aluno_turma):''}</div>`:'';
     const pd=pD.includes(d.categoria);
+        const eMaterial = d.categoria==='Solicitação de material/cópias';
         const docIcon=d.doc_gerado?'<span title="Documento já gerado" style="font-size:.8rem;color:var(--verde2)">📄✓</span>':''
     return`<div class="card ${d.urgencia} ${d.status}">
       <div class="ch"><div><div class="ca">${e(d.autor)}</div><div class="cw">${e(d.data_msg||d.criado_em?.slice(0,10)||'')} ${e(d.hora_msg||d.criado_em?.slice(11,16)||'')} · ${e(d.origem)}</div></div>
@@ -357,6 +358,7 @@ function renderD(){
         </select>
         <button class="bs sm" onclick="abrirD('${d.id}')">📂 Detalhe</button>
         ${pd?`<button class="bp sm" onclick="gerarDoc('${d.id}')">📄 Gerar doc</button>`:''}
+        ${eMaterial?`<button class="bs sm" style="color:#1e40af;border-color:#93c5fd" onclick="abrirEnvioImpressao('${d.id}')">🖨️ Enviar p/ impressão</button>`:''}
         <button class="bi sm" style="color:var(--vermelho)" onclick="delD('${d.id}')">🗑</button>
       </div></div>`;
   }).join('');
@@ -597,6 +599,131 @@ function e(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;'
 function g(id){return document.getElementById(id);}
 function toast(m){const t=g('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
 function fecharM(){g('mBg').classList.remove('open');}
+
+/* ================================================================
+   ENVIO PARA FILA DE IMPRESSÃO
+================================================================ */
+function abrirEnvioImpressao(id){
+  const d = DD.find(x=>x.id===id);
+  if(!d) return;
+
+  // Montar lista de turmas para o select
+  const ESTRUTURA_TURMAS = [
+    // Manhã
+    {turma:'41',professor:'Marcelle',turno:'Manhã'},{turma:'51',professor:'Simone',turno:'Manhã'},
+    {turma:'101',professor:'Anatália',turno:'Manhã'},{turma:'201',professor:'Flávia',turno:'Manhã'},
+    {turma:'202',professor:'Rosemere',turno:'Manhã'},{turma:'301',professor:'Luciane',turno:'Manhã'},
+    {turma:'401',professor:'Patrícia',turno:'Manhã'},{turma:'501',professor:'Haylane',turno:'Manhã'},
+    {turma:'2001',professor:'Elaine',turno:'Manhã'},{turma:'2002',professor:'—',turno:'Manhã'},
+    {turma:'2003',professor:'Elisangela',turno:'Manhã'},{turma:'2004',professor:'—',turno:'Manhã'},
+    // Tarde
+    {turma:'42',professor:'Thayane',turno:'Tarde'},{turma:'52',professor:'Simone',turno:'Tarde'},
+    {turma:'102',professor:'Anatália',turno:'Tarde'},{turma:'103',professor:'Marcelle',turno:'Tarde'},
+    {turma:'203',professor:'Marilene',turno:'Tarde'},{turma:'302',professor:'Elisangela',turno:'Tarde'},
+    {turma:'402',professor:'Rosemere',turno:'Tarde'},{turma:'502',professor:'Liliana',turno:'Tarde'},
+    {turma:'2005',professor:'Hanna',turno:'Tarde'},{turma:'2006',professor:'Luciane',turno:'Tarde'},
+    {turma:'2007',professor:'Haylane',turno:'Tarde'},
+    // AEE
+    {turma:'1001',professor:'Hilda',turno:'AEE'},{turma:'1002',professor:'Hilda',turno:'AEE'},
+    {turma:'1003',professor:'Hilda',turno:'AEE'},{turma:'1004',professor:'Hilda',turno:'AEE'},
+    {turma:'1005',professor:'Daniele',turno:'AEE'},{turma:'1006',professor:'Daniele',turno:'AEE'},
+    {turma:'1007',professor:'Bianca',turno:'AEE'},{turma:'1008',professor:'Bianca',turno:'AEE'},
+    {turma:'1009',professor:'Bianca',turno:'AEE'},
+    // Extraclasse
+    {turma:'Ed. Física',professor:'Wallace / Amanda',turno:'Extraclasse'},
+    {turma:'Artes',professor:'Mel',turno:'Extraclasse'},
+    {turma:'Informática',professor:'Cláudio / Luciana',turno:'Extraclasse'},
+    {turma:'Projetos (Prosa)',professor:'Anna Carolina',turno:'Extraclasse'},
+  ];
+
+  // Tentar pré-selecionar turma do aluno vinculado
+  const turmaPresel = d.aluno_turma || d.origem || '';
+  const turmaSel = ESTRUTURA_TURMAS.find(t=>turmaPresel.includes(t.turma));
+
+  const opcoesT = ESTRUTURA_TURMAS.map(t=>
+    `<option value='${t.turma}|${t.professor}|${t.turno}' ${turmaSel&&turmaSel.turma===t.turma?'selected':''}>
+      Turma ${t.turma} — Prof. ${t.professor} (${t.turno})
+    </option>`
+  ).join('');
+
+  g('mTit').textContent = '🖨️ Enviar para fila de impressão';
+  g('mBody').innerHTML = `
+    <div style="background:#dbeafe;border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:.85rem;color:#1e3a5f">
+      <strong>Solicitação:</strong> ${e(d.autor)} · ${e(d.origem)}<br>
+      <div style="margin-top:4px;color:#334;font-size:.82rem">${e(d.texto.slice(0,200))}${d.texto.length>200?'…':''}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="f"><label>Professor(a) solicitante</label>
+        <input type="text" id="imp-prof" value="${e(d.autor)}" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></div>
+      <div class="f"><label>Quantidade de cópias</label>
+        <input type="number" id="imp-qtd" value="1" min="1" max="200" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></div>
+      <div class="f" style="grid-column:1/-1"><label>Turma de destino</label>
+        <select id="imp-turma" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;background:#fff">
+          <option value="">Selecione a turma…</option>${opcoesT}
+        </select>
+      </div>
+      <div class="f" style="grid-column:1/-1"><label>Nome do arquivo / descrição do material</label>
+        <input type="text" id="imp-arq" value="${e(d.texto.split('\n')[0].slice(0,80))}" placeholder="Ex: Avaliação de Matemática — 3º bimestre" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></div>
+      <div class="f" style="grid-column:1/-1"><label>Observações</label>
+        <input type="text" id="imp-obs" placeholder="Ex: frente e verso, colorido…" style="padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit"></div>
+    </div>
+    <div style="display:flex;gap:14px;margin-top:12px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;cursor:pointer">
+        <input type="checkbox" id="imp-fv" style="width:16px;height:16px;accent-color:var(--verde2)"> Frente e verso
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:.88rem;cursor:pointer">
+        <input type="checkbox" id="imp-cor" style="width:16px;height:16px;accent-color:var(--verde2)"> Colorido
+      </label>
+    </div>
+    <div style="background:#fff8e1;border:1px solid #f0cc6e;border-radius:8px;padding:10px 14px;margin-top:14px;font-size:.82rem;color:#5a4200">
+      💡 O arquivo será enviado para a fila de impressão. A secretaria verá a solicitação no sistema de impressão na ordem de chegada.
+    </div>`;
+
+  g('mFoot').innerHTML = `
+    <button class="bs" onclick="fecharM()">Cancelar</button>
+    <button class="bp" onclick="confirmarEnvioImpressao('${id}')">🖨️ Enviar para fila</button>`;
+  g('mBg').classList.add('open');
+}
+
+async function confirmarEnvioImpressao(idDemanda){
+  const turmaSel = g('imp-turma').value;
+  if(!turmaSel){toast('Selecione a turma.');return;}
+  const [turma, professor, turno] = turmaSel.split('|');
+  const arqNome = g('imp-arq').value.trim();
+  if(!arqNome){toast('Informe o nome do arquivo ou material.');return;}
+
+  const sol = {
+    professor: g('imp-prof').value.trim() || 'Secretaria',
+    turma, turno,
+    segmento: '',
+    arquivo_nome: arqNome,
+    arquivo_url: null,
+    arquivo_tipo: 'solicitação',
+    quantidade_copias: parseInt(g('imp-qtd').value)||1,
+    frente_verso: g('imp-fv').checked,
+    colorido: g('imp-cor').checked,
+    observacoes: g('imp-obs').value.trim(),
+    status: 'aguardando',
+  };
+
+  try{
+    await db('impressoes','POST',sol);
+    // Marcar a demanda como em andamento
+    await db('demandas','PATCH',{status:'em_andamento'},`?id=eq.${idDemanda}`);
+    const d = DD.find(x=>x.id===idDemanda);
+    if(d) d.status='em_andamento';
+    // Registrar no histórico
+    await db('historico_demandas','POST',{
+      demanda_id: idDemanda,
+      acao: 'Enviado para fila de impressão',
+      usuario: 'secretaria',
+      detalhe: `Turma ${turma} · ${sol.quantidade_copias} cópia(s) · ${new Date().toLocaleString('pt-BR')}`
+    });
+    fecharM();
+    renderD();
+    toast('✅ Enviado para a fila de impressão!');
+  }catch(ex){toast('Erro: '+ex.message);}
+}
 function aba(btn){document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));btn.classList.add('active');g('view-'+btn.dataset.v).classList.add('active');}
 function abaId(id){const b=document.querySelector(`.tab[data-v="${id}"]`);if(b)aba(b);}
 function irRegistrar(){abaId('registrar');}
