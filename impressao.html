@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fila de Impressão — E.M. Regina Celi</title>
+<style>
+:root{--verde:#2a4f45;--verde2:#3a6b5e;--verde3:#eef3f0;--amarelo:#c98a1e;--vermelho:#b23a3a;--ink:#1a2238;--paper:#f7f4ec;--line:#d8d0bf;--shadow:rgba(26,34,56,.08);--radius:10px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--paper);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+header{background:var(--verde);color:#fff;padding:14px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.hi{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ht h1{font-size:1rem;font-weight:700;line-height:1.2}
+.ht p{font-size:.72rem;opacity:.8}
+.hr{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{background:#4ade80;color:#14532d;font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:20px}
+main{max-width:1100px;margin:0 auto;padding:20px}
+button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16px;font-weight:600;transition:.15s}
+.bp{background:var(--verde2);color:#fff}.bp:hover{background:var(--verde)}
+.bs{background:#fff;color:var(--verde);border:1.5px solid var(--verde2)}.bs:hover{background:var(--verde3)}
+.sm{padding:5px 12px;font-size:.82rem;border-radius:6px}
+/* TABS */
+.tabs{display:flex;gap:2px;border-bottom:2px solid var(--line);margin-bottom:20px;flex-wrap:wrap}
+.tab{padding:10px 18px;background:transparent;color:#778;border-radius:8px 8px 0 0;font-weight:600;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.15s;cursor:pointer}
+.tab.active{color:var(--verde);border-bottom-color:var(--verde2)}
+.view{display:none}.view.active{display:block}
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:0 1px 4px var(--shadow);text-align:center}
+.stat .num{font-size:1.8rem;font-weight:700;line-height:1}
+.stat .lbl{font-size:.72rem;color:#778;text-transform:uppercase;letter-spacing:.4px;margin-top:3px}
+.stat.ag .num{color:var(--amarelo)}.stat.ok .num{color:var(--verde2)}
+/* FILA */
+.fila-item{background:#fff;border:1px solid var(--line);border-left:5px solid var(--amarelo);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 4px var(--shadow);display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
+.fila-item.imprimindo{border-left-color:var(--verde2);background:#f0f9f6}
+.fila-item.concluido{border-left-color:var(--line);opacity:.6}
+.fila-item.cancelado{border-left-color:var(--vermelho);opacity:.5}
+.fila-num{background:var(--verde);color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.95rem;flex-shrink:0}
+.fila-num.ag{background:var(--amarelo)}
+.fila-num.ok{background:var(--verde2)}
+.fila-info{flex:1;min-width:200px}
+.fila-titulo{font-weight:700;font-size:.95rem;margin-bottom:2px}
+.fila-meta{font-size:.8rem;color:#778;margin-bottom:6px}
+.fila-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.tag{font-size:.72rem;padding:2px 8px;border-radius:20px;font-weight:700}
+.tag.turno-m{background:#dbeafe;color:#1e40af}
+.tag.turno-t{background:#fef3c7;color:#92400e}
+.tag.turno-aee{background:#f3e8ff;color:#6b21a8}
+.tag.turno-ex{background:#fee2e2;color:#991b1b}
+.tag.copies{background:var(--verde3);color:var(--verde)}
+.tag.tipo{background:#f3f4f6;color:#374151}
+.fila-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.fila-tempo{font-size:.75rem;color:#99a;margin-top:4px}
+/* UPLOAD */
+.fcard{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin-bottom:20px;box-shadow:0 1px 4px var(--shadow)}
+.fcard h3{color:var(--verde);font-size:1rem;margin-bottom:16px;font-weight:700}
+.fg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.f{display:flex;flex-direction:column;gap:4px}
+.f label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#556}
+.f input,.f select,.f textarea{padding:9px 12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;font-size:.9rem;background:#fff;transition:.15s}
+.f input:focus,.f select:focus{outline:none;border-color:var(--verde2)}
+.f.full{grid-column:1/-1}
+/* UPLOAD ZONE */
+.upzone{border:2px dashed var(--line);border-radius:10px;padding:30px;text-align:center;cursor:pointer;transition:.15s;background:var(--paper)}
+.upzone:hover,.upzone.drag{border-color:var(--verde2);background:var(--verde3)}
+.upzone .ico{font-size:2rem;margin-bottom:8px}
+.upzone p{font-size:.85rem;color:#778;margin-top:4px}
+.arquivo-preview{background:var(--verde3);border:1px solid var(--verde2);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin-top:10px}
+.arquivo-preview .fi{font-size:1.4rem;flex-shrink:0}
+.arquivo-preview .fn{font-size:.88rem;font-weight:600;color:var(--verde)}
+.arquivo-preview .fs{font-size:.75rem;color:#778}
+/* PASTAS POR TURMA */
+.pastas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px}
+.pasta{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px;cursor:pointer;transition:.15s;box-shadow:0 1px 4px var(--shadow)}
+.pasta:hover{border-color:var(--verde2);background:var(--verde3)}
+.pasta .pi{font-size:1.8rem;margin-bottom:6px}
+.pasta .pt{font-weight:700;font-size:.9rem}
+.pasta .pp{font-size:.78rem;color:#778;margin-top:2px}
+.pasta .pn{font-size:.72rem;background:var(--verde3);color:var(--verde);padding:2px 8px;border-radius:20px;font-weight:700;display:inline-block;margin-top:4px}
+.pasta .pn.zero{background:#f3f4f6;color:#9ca3af}
+.secao-turno{margin-bottom:28px}
+.secao-turno h3{font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--verde);border-bottom:2px solid var(--verde3);padding-bottom:6px;margin-bottom:12px}
+/* MODAL */
+.mbg{display:none;position:fixed;inset:0;background:rgba(26,34,56,.55);z-index:200;align-items:flex-start;justify-content:center;padding:24px 16px;overflow-y:auto}
+.mbg.open{display:flex}
+.modal{background:#fff;border-radius:12px;max-width:700px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;display:flex;flex-direction:column}
+.mt{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.mt h3{font-size:1rem;color:var(--verde);flex:1}
+.mb{padding:20px;overflow-y:auto;flex:1}
+.mf{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0}
+/* EMPTY */
+.empty{text-align:center;padding:40px;color:#99a;font-size:.9rem}
+.loading{text-align:center;padding:30px;color:#778}
+/* TOAST */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:.88rem;opacity:0;transition:.25s;z-index:300;pointer-events:none}
+.toast.show{opacity:1}
+/* CHECKBOX */
+.chk-row{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:8px 0}
+.chk-row label{display:flex;align-items:center;gap:6px;font-size:.88rem;cursor:pointer}
+.chk-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--verde2)}
+@media(max-width:600px){main{padding:12px}.fg{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hi">
+    <div class="ht">
+      <h1>🖨️ Fila de Impressão</h1>
+      <p>E.M. Regina Celi da Silva Cerdeira · Duque de Caxias / RJ</p>
+    </div>
+    <div class="hr">
+      <span class="badge" id="stConn">● Conectando...</span>
+      <a href="https://emreginacelicr25-code.github.io/rcsc-triagem" style="background:rgba(255,255,255,.2);color:#fff;padding:6px 14px;border-radius:8px;font-size:.82rem;font-weight:600;text-decoration:none">← Triagem</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab active" data-v="fila" onclick="aba(this)">📋 Fila de impressão</button>
+    <button class="tab" data-v="solicitar" onclick="aba(this)">📤 Nova solicitação</button>
+    <button class="tab" data-v="pastas" onclick="aba(this)">📁 Pastas por turma</button>
+  </div>
+
+  <!-- FILA -->
+  <section class="view active" id="view-fila">
+    <div class="stats">
+      <div class="stat ag"><div class="num" id="sAg">—</div><div class="lbl">Aguardando</div></div>
+      <div class="stat"><div class="num" id="sIm">—</div><div class="lbl">Imprimindo</div></div>
+      <div class="stat ok"><div class="num" id="sCo">—</div><div class="lbl">Concluídos hoje</div></div>
+      <div class="stat"><div class="num" id="sTt">—</div><div class="lbl">Total</div></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+      <select id="fSt" onchange="renderFila()" style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff">
+        <option value="">Todos os status</option>
+        <option value="aguardando" selected>⏳ Aguardando</option>
+        <option value="imprimindo">🖨️ Imprimindo</option>
+        <option value="concluido">✅ Concluído</option>
+        <option value="cancelado">❌ Cancelado</option>
+      </select>
+      <select id="fTn" onchange="renderFila()" style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff">
+        <option value="">Todos os turnos</option>
+        <option value="Manhã">☀️ Manhã</option>
+        <option value="Tarde">🌤️ Tarde</option>
+        <option value="AEE">♿ AEE</option>
+        <option value="Extraclasse">🎨 Extraclasse</option>
+      </select>
+      <button class="bs sm" onclick="loadImpressoes()">↺ Atualizar</button>
+      <div style="margin-left:auto;font-size:.8rem;color:#778" id="ultimaAtt"></div>
+    </div>
+    <div id="listaFila"><div class="loading">Carregando...</div></div>
+  </section>
+
+  <!-- SOLICITAR -->
+  <section class="view" id="view-solicitar">
+    <div class="fcard">
+      <h3>📤 Nova solicitação de impressão</h3>
+      <div class="fg">
+        <div class="f">
+          <label>Professor(a)</label>
+          <select id="sPrf" onchange="filtrarTurmas()">
+            <option value="">Selecione o professor(a)…</option>
+          </select>
+        </div>
+        <div class="f">
+          <label>Turma</label>
+          <select id="sTrm">
+            <option value="">Selecione a turma…</option>
+          </select>
+        </div>
+        <div class="f">
+          <label>Quantidade de cópias</label>
+          <input type="number" id="sQtd" value="1" min="1" max="200">
+        </div>
+        <div class="f">
+          <label>Observações (opcional)</label>
+          <input type="text" id="sObs" placeholder="Ex: imprimir frente e verso, cor…">
+        </div>
+      </div>
+      <div class="chk-row" style="margin-top:8px">
+        <label><input type="checkbox" id="sFV"> Frente e verso</label>
+        <label><input type="checkbox" id="sCor"> Colorido</label>
+      </div>
+
+      <div style="margin-top:16px">
+        <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#556;display:block;margin-bottom:8px">Arquivo para impressão</label>
+        <div class="upzone" id="upZone" onclick="g('fileInput').click()"
+          ondragover="ev.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="ev.preventDefault();this.classList.remove('drag');handleFileDrop(event)">
+          <div class="ico">📎</div>
+          <b>Toque aqui para selecionar o arquivo</b>
+          <p>PDF, Word (.docx) ou imagem (JPG, PNG) · Máximo 10MB</p>
+          <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" hidden onchange="handleFileSelect(event)">
+        </div>
+        <div id="arquivoPreview" style="display:none"></div>
+      </div>
+
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="bp" onclick="enviarSolicitacao()">📤 Enviar para fila de impressão</button>
+        <button class="bs" onclick="limparForm()">✕ Limpar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- PASTAS -->
+  <section class="view" id="view-pastas">
+    <div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="text" id="buscaPasta" placeholder="Buscar turma ou professor…" oninput="renderPastas()"
+        style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;font:inherit">
+      <button class="bs sm" onclick="loadImpressoes()">↺ Atualizar</button>
+    </div>
+    <div id="listaPastas"><div class="loading">Carregando...</div></div>
+  </section>
+</main>
+
+<!-- MODAL PASTA -->
+<div class="mbg" id="mBg">
+  <div class="modal">
+    <div class="mt"><h3 id="mTit">Pasta</h3><button onclick="fecharM()" style="background:transparent;font-size:1.1rem;color:#778;cursor:pointer;border:none">✕</button></div>
+    <div class="mb" id="mBody"></div>
+    <div class="mf"><button class="bs" onclick="fecharM()">Fechar</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SU='https://wulihgevyzzhysnxzhoy.supabase.co';
+const SK='sb_publishable_YTaSssCbwiudqrAoRx2YpA_CrEhc4Sb';
+
+async function db(tab,met='GET',body=null,q=''){
+  const r=await fetch(`${SU}/rest/v1/${tab}${q}`,{method:met,headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':met==='POST'?'return=representation':''},body:body?JSON.stringify(body):null});
+  if(!r.ok)throw new Error(await r.text());
+  if(met==='DELETE'||r.status===204)return true;
+  return r.json();
+}
+
+// Upload para Supabase Storage
+async function uploadArquivo(file){
+  const ext = file.name.split('.').pop();
+  const nomeUnico = `${Date.now()}_${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const r = await fetch(`${SU}/storage/v1/object/impressoes/${nomeUnico}`,{
+    method:'POST',
+    headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':file.type,'x-upsert':'true'},
+    body: file
+  });
+  if(!r.ok){
+    const err = await r.text();
+    // Se Storage não configurado, salvar sem URL (só metadados)
+    console.warn('Storage indisponível, salvando sem URL:', err);
+    return null;
+  }
+  const publicUrl = `${SU}/storage/v1/object/public/impressoes/${nomeUnico}`;
+  return publicUrl;
+}
+
+/* ================================================================
+   ESTRUTURA DE TURMAS
+================================================================ */
+const ESTRUTURA = {
+  "Manhã":{
+    "Educação Infantil":[
+      {turma:"41",professor:"Marcelle"},
+      {turma:"51",professor:"Simone"},
+    ],
+    "Ensino Fundamental":[
+      {turma:"101",professor:"Anatália"},
+      {turma:"201",professor:"Flávia"},
+      {turma:"202",professor:"Rosemere"},
+      {turma:"301",professor:"Luciane"},
+      {turma:"401",professor:"Patrícia"},
+      {turma:"501",professor:"Haylane"},
+    ],
+    "Classes Especiais":[
+      {turma:"2001",professor:"Elaine"},
+      {turma:"2002",professor:"—"},
+      {turma:"2003",professor:"Elisangela"},
+      {turma:"2004",professor:"—"},
+    ],
+  },
+  "Tarde":{
+    "Educação Infantil":[
+      {turma:"42",professor:"Thayane"},
+      {turma:"52",professor:"Simone"},
+    ],
+    "Ensino Fundamental":[
+      {turma:"102",professor:"Anatália"},
+      {turma:"103",professor:"Marcelle"},
+      {turma:"203",professor:"Marilene"},
+      {turma:"302",professor:"Elisangela"},
+      {turma:"402",professor:"Rosemere"},
+      {turma:"502",professor:"Liliana"},
+    ],
+    "Classes Especiais":[
+      {turma:"2005",professor:"Hanna"},
+      {turma:"2006",professor:"Luciane"},
+      {turma:"2007",professor:"Haylane"},
+    ],
+  },
+  "AEE":{
+    "Sala de Recursos":[
+      {turma:"1001",professor:"Hilda"},
+      {turma:"1002",professor:"Hilda"},
+      {turma:"1003",professor:"Hilda"},
+      {turma:"1004",professor:"Hilda"},
+      {turma:"1005",professor:"Daniele"},
+      {turma:"1006",professor:"Daniele"},
+      {turma:"1007",professor:"Bianca"},
+      {turma:"1008",professor:"Bianca"},
+      {turma:"1009",professor:"Bianca"},
+    ],
+  },
+  "Extraclasse":{
+    "Disciplinas":[
+      {turma:"Ed. Física",professor:"Wallace / Amanda"},
+      {turma:"Artes",professor:"Mel"},
+      {turma:"Informática",professor:"Cláudio / Luciana"},
+      {turma:"Projetos (Prosa)",professor:"Anna Carolina"},
+    ],
+  },
+};
+
+// Lista plana de todas as turmas
+const TODAS_TURMAS = [];
+const PROFESSORES = new Set();
+for(const [turno, segs] of Object.entries(ESTRUTURA)){
+  for(const [seg, turmas] of Object.entries(segs)){
+    for(const t of turmas){
+      TODAS_TURMAS.push({...t, turno, segmento:seg});
+      if(t.professor && t.professor !== '—') t.professor.split(' / ').forEach(p=>PROFESSORES.add(p.trim()));
+    }
+  }
+}
+
+/* ================================================================
+   ESTADO
+================================================================ */
+let IMPRESSOES = [];
+let ARQUIVO_SELECIONADO = null;
+
+/* ================================================================
+   CARREGAR
+================================================================ */
+async function loadImpressoes(){
+  try{
+    IMPRESSOES = await db('impressoes','GET',null,'?order=criado_em.asc&limit=500');
+    stats();
+    renderFila();
+    renderPastas();
+    g('ultimaAtt').textContent = 'Atualizado: '+new Date().toLocaleTimeString('pt-BR');
+    g('stConn').textContent='● Online';
+    g('stConn').style.cssText='background:#4ade80;color:#14532d';
+  }catch(ex){
+    g('listaFila').innerHTML=`<div class="empty">⚠️ Erro: ${ex.message}</div>`;
+    g('stConn').textContent='● Offline';
+    g('stConn').style.cssText='background:#fca5a5;color:#7f1d1d';
+  }
+}
+
+/* ================================================================
+   STATS
+================================================================ */
+function stats(){
+  const hoje = new Date().toISOString().slice(0,10);
+  g('sAg').textContent = IMPRESSOES.filter(i=>i.status==='aguardando').length;
+  g('sIm').textContent = IMPRESSOES.filter(i=>i.status==='imprimindo').length;
+  g('sCo').textContent = IMPRESSOES.filter(i=>i.status==='concluido'&&i.impresso_em?.slice(0,10)===hoje).length;
+  g('sTt').textContent = IMPRESSOES.length;
+}
+
+/* ================================================================
+   RENDER FILA
+================================================================ */
+function renderFila(){
+  const fSt = g('fSt').value;
+  const fTn = g('fTn').value;
+  let lista = IMPRESSOES.filter(i=>{
+    if(fSt && i.status!==fSt) return false;
+    if(fTn && i.turno!==fTn) return false;
+    return true;
+  });
+
+  const cont = g('listaFila');
+  if(!lista.length){cont.innerHTML='<div class="empty">📭 Nenhum item na fila.</div>';return;}
+
+  const tagTurno = {
+    'Manhã':'<span class="tag turno-m">☀️ Manhã</span>',
+    'Tarde':'<span class="tag turno-t">🌤️ Tarde</span>',
+    'AEE':'<span class="tag turno-aee">♿ AEE</span>',
+    'Extraclasse':'<span class="tag turno-ex">🎨 Extra</span>',
+  };
+  const iconeArq = {pdf:'📄',docx:'📝',doc:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️'};
+  let pos = 0;
+
+  cont.innerHTML = lista.map(i=>{
+    const ext = (i.arquivo_nome||'').split('.').pop().toLowerCase();
+    const ico = iconeArq[ext]||'📎';
+    const tt = tagTurno[i.turno]||'';
+    const st = i.status;
+    pos = st==='aguardando' ? pos+1 : pos;
+    const numLabel = st==='aguardando' ? pos : st==='imprimindo' ? '🖨' : st==='concluido' ? '✓' : '✕';
+    const numClass = st==='aguardando' ? 'ag' : st==='concluido' ? 'ok' : '';
+    const tempo = new Date(i.criado_em).toLocaleString('pt-BR');
+
+    return `<div class="fila-item ${st}" id="fi-${i.id}">
+      <div class="fila-num ${numClass}">${numLabel}</div>
+      <div class="fila-info">
+        <div class="fila-titulo">${ico} ${e(i.arquivo_nome)}</div>
+        <div class="fila-meta">Prof. ${e(i.professor)} · Turma ${e(i.turma)} · ${e(i.segmento||'')}</div>
+        <div class="fila-tags">
+          ${tt}
+          <span class="tag copies">📄 ${i.quantidade_copias} cópia${i.quantidade_copias>1?'s':''}</span>
+          ${i.frente_verso?'<span class="tag tipo">Frente/verso</span>':''}
+          ${i.colorido?'<span class="tag tipo">Colorido</span>':''}
+          ${i.arquivo_tipo?`<span class="tag tipo">${e(i.arquivo_tipo.toUpperCase())}</span>`:''}
+        </div>
+        ${i.observacoes?`<div style="font-size:.82rem;color:#556;margin-bottom:6px">💬 ${e(i.observacoes)}</div>`:''}
+        <div class="fila-actions">
+          ${i.arquivo_url?`<a href="${i.arquivo_url}" target="_blank" class="bp sm" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px">⬇️ Baixar arquivo</a>`:'<span style="font-size:.78rem;color:#99a">Arquivo sem URL</span>'}
+          ${st==='aguardando'?`<button class="bs sm" onclick="mudarStatus('${i.id}','imprimindo')">🖨️ Iniciar impressão</button>`:''}
+          ${st==='imprimindo'?`<button class="bp sm" onclick="mudarStatus('${i.id}','concluido')">✅ Concluir</button>`:''}
+          ${st!=='concluido'&&st!=='cancelado'?`<button class="bs sm" style="color:var(--vermelho);border-color:var(--vermelho)" onclick="mudarStatus('${i.id}','cancelado')">✕ Cancelar</button>`:''}
+        </div>
+        <div class="fila-tempo">Solicitado em ${tempo}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ================================================================
+   MUDAR STATUS
+================================================================ */
+async function mudarStatus(id, novoStatus){
+  try{
+    const upd = {status: novoStatus};
+    if(novoStatus==='concluido') upd.impresso_em = new Date().toISOString();
+    await db('impressoes','PATCH',upd,`?id=eq.${id}`);
+    const item = IMPRESSOES.find(i=>i.id===id);
+    if(item) Object.assign(item, upd);
+    stats(); renderFila(); renderPastas();
+    toast(novoStatus==='concluido'?'✅ Marcado como concluído!':novoStatus==='imprimindo'?'🖨️ Impressão iniciada!':'Cancelado.');
+  }catch(ex){toast('Erro: '+ex.message);}
+}
+
+/* ================================================================
+   PASTAS POR TURMA
+================================================================ */
+function renderPastas(){
+  const busca = g('buscaPasta').value.toLowerCase();
+  const cont = g('listaPastas');
+  let html = '';
+
+  for(const [turno, segs] of Object.entries(ESTRUTURA)){
+    let turmasFiltradas = [];
+    for(const [seg, turmas] of Object.entries(segs)){
+      turmas.forEach(t=>{
+        if(busca && !t.turma.toLowerCase().includes(busca) && !t.professor.toLowerCase().includes(busca)) return;
+        turmasFiltradas.push({...t, turno, segmento:seg});
+      });
+    }
+    if(!turmasFiltradas.length) continue;
+
+    const icTurno = {Manhã:'☀️',Tarde:'🌤️',AEE:'♿',Extraclasse:'🎨'};
+    html += `<div class="secao-turno"><h3>${icTurno[turno]||'📁'} ${turno}</h3><div class="pastas-grid">`;
+
+    turmasFiltradas.forEach(t=>{
+      const qtd = IMPRESSOES.filter(i=>i.turma===t.turma&&i.status!=='cancelado').length;
+      const aguard = IMPRESSOES.filter(i=>i.turma===t.turma&&i.status==='aguardando').length;
+      html += `<div class="pasta" onclick="abrirPasta('${t.turma}','${e(t.professor)}','${t.turno}')">
+        <div class="pi">📁</div>
+        <div class="pt">Turma ${t.turma}</div>
+        <div class="pp">Prof. ${e(t.professor)}</div>
+        <div class="pp" style="font-size:.72rem;color:#99a">${t.segmento}</div>
+        <span class="pn ${qtd===0?'zero':''}">${qtd===0?'Vazia':`${qtd} arquivo${qtd>1?'s':''}${aguard>0?' · '+aguard+' aguardando':''}`}</span>
+      </div>`;
+    });
+    html += '</div></div>';
+  }
+
+  cont.innerHTML = html || '<div class="empty">Nenhuma turma encontrada.</div>';
+}
+
+function abrirPasta(turma, professor, turno){
+  const itens = IMPRESSOES.filter(i=>i.turma===turma&&i.status!=='cancelado');
+  g('mTit').textContent = `📁 Turma ${turma} — Prof. ${professor}`;
+
+  if(!itens.length){
+    g('mBody').innerHTML = '<div class="empty">📭 Nenhum arquivo nesta pasta.</div>';
+  } else {
+    const iconeArq = {pdf:'📄',docx:'📝',doc:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️'};
+    g('mBody').innerHTML = itens.map(i=>{
+      const ext=(i.arquivo_nome||'').split('.').pop().toLowerCase();
+      const ico=iconeArq[ext]||'📎';
+      const cor = i.status==='concluido'?'#d1fae5':i.status==='imprimindo'?'#dbeafe':'#fef3c7';
+      const stLabel = i.status==='concluido'?'✅ Concluído':i.status==='imprimindo'?'🖨️ Imprimindo':'⏳ Aguardando';
+      return `<div style="background:${cor};border-radius:8px;padding:12px 14px;margin-bottom:10px;border:1px solid var(--line)">
+        <div style="font-weight:700;font-size:.92rem;margin-bottom:4px">${ico} ${e(i.arquivo_nome)}</div>
+        <div style="font-size:.8rem;color:#556;margin-bottom:6px">
+          ${i.quantidade_copias} cópia${i.quantidade_copias>1?'s':''} · ${i.frente_verso?'Frente/verso · ':''} ${i.colorido?'Colorido · ':''} ${stLabel}
+        </div>
+        <div style="font-size:.75rem;color:#99a;margin-bottom:8px">Solicitado em ${new Date(i.criado_em).toLocaleString('pt-BR')}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${i.arquivo_url?`<a href="${i.arquivo_url}" target="_blank" class="bp sm" style="text-decoration:none">⬇️ Abrir / Imprimir</a>`:'<span style="font-size:.78rem;color:#99a">Sem link de download</span>'}
+          ${i.status==='aguardando'?`<button class="bs sm" onclick="mudarStatus('${i.id}','concluido');fecharM();loadImpressoes()">✅ Marcar concluído</button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+  g('mBg').classList.add('open');
+}
+
+/* ================================================================
+   FORMULÁRIO DE SOLICITAÇÃO
+================================================================ */
+function popularProfessores(){
+  const sel = g('sPrf');
+  sel.innerHTML = '<option value="">Selecione o professor(a)…</option>';
+  [...PROFESSORES].sort().forEach(p=>{
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+}
+
+function filtrarTurmas(){
+  const prof = g('sPrf').value;
+  const sel = g('sTrm');
+  sel.innerHTML = '<option value="">Selecione a turma…</option>';
+  const turmasProf = TODAS_TURMAS.filter(t=>
+    t.professor === prof ||
+    t.professor.includes(prof) ||
+    prof.split('/').map(p=>p.trim()).some(p=>t.professor.includes(p))
+  );
+  if(!turmasProf.length){
+    // Se não encontrou, mostrar todas
+    TODAS_TURMAS.forEach(t=>{
+      const o=document.createElement('option');
+      o.value=JSON.stringify({turma:t.turma,turno:t.turno,segmento:t.segmento,professor:t.professor});
+      o.textContent=`Turma ${t.turma} (${t.turno})`;
+      sel.appendChild(o);
+    });
+  } else {
+    turmasProf.forEach(t=>{
+      const o=document.createElement('option');
+      o.value=JSON.stringify({turma:t.turma,turno:t.turno,segmento:t.segmento,professor:t.professor});
+      o.textContent=`Turma ${t.turma} — ${t.turno}`;
+      sel.appendChild(o);
+    });
+  }
+}
+
+function handleFileSelect(ev){
+  const file = ev.target.files[0];
+  if(file) mostrarArquivo(file);
+}
+function handleFileDrop(ev){
+  const file = ev.dataTransfer.files[0];
+  if(file){ g('fileInput').files = ev.dataTransfer.files; mostrarArquivo(file); }
+}
+function mostrarArquivo(file){
+  const maxMB = 10;
+  if(file.size > maxMB*1024*1024){ toast(`Arquivo muito grande. Máximo ${maxMB}MB.`); return; }
+  ARQUIVO_SELECIONADO = file;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const icos = {pdf:'📄',docx:'📝',doc:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️'};
+  const ico = icos[ext]||'📎';
+  const mb = (file.size/1024/1024).toFixed(2);
+  g('arquivoPreview').style.display='flex';
+  g('arquivoPreview').innerHTML=`<div class="fi">${ico}</div><div><div class="fn">${e(file.name)}</div><div class="fs">${mb} MB · ${ext.toUpperCase()}</div></div>
+    <button onclick="removerArquivo()" style="margin-left:auto;background:transparent;border:none;color:#99a;cursor:pointer;font-size:1.1rem">✕</button>`;
+}
+function removerArquivo(){
+  ARQUIVO_SELECIONADO=null;
+  g('fileInput').value='';
+  g('arquivoPreview').style.display='none';
+  g('arquivoPreview').innerHTML='';
+}
+
+async function enviarSolicitacao(){
+  if(!g('sPrf').value){toast('Selecione o professor(a).');return;}
+  const turmaSel = g('sTrm').value;
+  if(!turmaSel){toast('Selecione a turma.');return;}
+  if(!ARQUIVO_SELECIONADO){toast('Selecione um arquivo.');return;}
+
+  const td = JSON.parse(turmaSel);
+  const btn = document.querySelector('[onclick="enviarSolicitacao()"]');
+  btn.textContent='Enviando...';btn.disabled=true;
+
+  try{
+    // Tentar upload do arquivo
+    const url = await uploadArquivo(ARQUIVO_SELECIONADO);
+    const ext = ARQUIVO_SELECIONADO.name.split('.').pop().toLowerCase();
+
+    const sol = {
+      professor: g('sPrf').value,
+      turma: td.turma,
+      turno: td.turno,
+      segmento: td.segmento,
+      arquivo_nome: ARQUIVO_SELECIONADO.name,
+      arquivo_url: url,
+      arquivo_tipo: ext,
+      arquivo_tamanho: (ARQUIVO_SELECIONADO.size/1024/1024).toFixed(2)+'MB',
+      quantidade_copias: parseInt(g('sQtd').value)||1,
+      frente_verso: g('sFV').checked,
+      colorido: g('sCor').checked,
+      observacoes: g('sObs').value.trim(),
+      status: 'aguardando',
+    };
+
+    await db('impressoes','POST',sol);
+    toast('✅ Solicitação enviada para a fila!');
+    limparForm();
+    await loadImpressoes();
+    aba(document.querySelector('.tab[data-v="fila"]'));
+  }catch(ex){
+    toast('Erro ao enviar: '+ex.message);
+  }
+  btn.textContent='📤 Enviar para fila de impressão';btn.disabled=false;
+}
+
+function limparForm(){
+  g('sPrf').value='';g('sTrm').innerHTML='<option value="">Selecione a turma…</option>';
+  g('sQtd').value='1';g('sObs').value='';
+  g('sFV').checked=false;g('sCor').checked=false;
+  removerArquivo();
+}
+
+/* ================================================================
+   UTILITÁRIOS
+================================================================ */
+function e(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function g(id){return document.getElementById(id);}
+function toast(m){const t=g('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);}
+function fecharM(){g('mBg').classList.remove('open');}
+function aba(btn){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  btn.classList.add('active');
+  g('view-'+btn.dataset.v).classList.add('active');
+}
+
+// Auto-refresh a cada 60 segundos
+setInterval(loadImpressoes, 60000);
+
+(async()=>{
+  popularProfessores();
+  await loadImpressoes();
+})();
+</script>
+</body>
+</html>
