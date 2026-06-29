@@ -91,6 +91,34 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
 /* EMPTY */
 .empty{text-align:center;padding:40px;color:#99a;font-size:.9rem}
 .loading{text-align:center;padding:30px;color:#778}
+/* COTAS */
+.cota-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:12px}
+.cota-card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;box-shadow:0 1px 4px var(--shadow)}
+.cota-card.verde{border-left:5px solid #22c55e}
+.cota-card.amarelo{border-left:5px solid var(--amarelo)}
+.cota-card.vermelho{border-left:5px solid #ef4444}
+.cota-card.critico{border-left:5px solid #7f1d1d;background:#fff5f5}
+.cota-topo{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cota-turma{font-weight:700;font-size:.92rem}
+.cota-prof{font-size:.75rem;color:#778;margin-top:1px}
+.cota-badge{font-size:.72rem;font-weight:700;padding:3px 9px;border-radius:20px}
+.badge-verde{background:#dcfce7;color:#15803d}
+.badge-amarelo{background:#fef3c7;color:#92400e}
+.badge-vermelho{background:#fee2e2;color:#b91c1c}
+.badge-critico{background:#7f1d1d;color:#fff}
+.barra-bg{background:#e5e7eb;border-radius:20px;height:10px;overflow:hidden;margin:8px 0}
+.barra-fill{height:100%;border-radius:20px;transition:width .4s}
+.fill-verde{background:#22c55e}
+.fill-amarelo{background:var(--amarelo)}
+.fill-vermelho{background:#ef4444}
+.fill-critico{background:#7f1d1d}
+.cota-nums{display:flex;justify-content:space-between;font-size:.75rem;color:#778}
+.cota-resumo{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px;box-shadow:0 1px 4px var(--shadow)}
+.cota-resumo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:10px}
+.resumo-item{text-align:center;padding:10px;border-radius:8px;background:var(--paper)}
+.resumo-item .rn{font-size:1.4rem;font-weight:700;line-height:1}
+.resumo-item .rl{font-size:.72rem;color:#778;text-transform:uppercase;letter-spacing:.3px;margin-top:3px}
+.trimestre-sel{padding:7px 12px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff;cursor:pointer}
 /* TOAST */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:.88rem;opacity:0;transition:.25s;z-index:300;pointer-events:none}
 .toast.show{opacity:1}
@@ -120,6 +148,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
     <button class="tab active" data-v="fila" onclick="aba(this)">📋 Fila de impressão</button>
     <button class="tab" data-v="solicitar" onclick="aba(this)">📤 Nova solicitação</button>
     <button class="tab" data-v="pastas" onclick="aba(this)">📁 Pastas por turma</button>
+    <button class="tab" data-v="cotas" onclick="aba(this)">📊 Cotas de impressão</button>
   </div>
 
   <!-- FILA -->
@@ -211,6 +240,39 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       <button class="bs sm" onclick="loadImpressoes()">↺ Atualizar</button>
     </div>
     <div id="listaPastas"><div class="loading">Carregando...</div></div>
+  </section>
+
+  <!-- COTAS -->
+  <section class="view" id="view-cotas">
+    <div class="cota-resumo">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:var(--verde)">📊 Controle de cotas — Trimestre</div>
+          <div style="font-size:.8rem;color:#778;margin-top:2px">10.000 folhas A4 disponíveis por trimestre</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <select class="trimestre-sel" id="selTrimestre" onchange="renderCotas()">
+            <option value="1">1º Trimestre</option>
+            <option value="2">2º Trimestre</option>
+            <option value="3">3º Trimestre</option>
+          </select>
+          <button class="bs sm" onclick="loadImpressoes()">↺ Atualizar</button>
+        </div>
+      </div>
+      <div class="cota-resumo-grid" id="cotaResumo"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <input type="text" id="buscaCota" placeholder="Buscar turma ou professor…" oninput="renderCotas()"
+        style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;font:inherit">
+      <select id="filtroSemaforo" onchange="renderCotas()" style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff">
+        <option value="">Todos os status</option>
+        <option value="critico">⛔ Crítico (>90%)</option>
+        <option value="vermelho">🔴 Alto (80-90%)</option>
+        <option value="amarelo">🟡 Médio (50-80%)</option>
+        <option value="verde">🟢 Normal (<50%)</option>
+      </select>
+    </div>
+    <div class="cota-grid" id="cotaGrid"></div>
   </section>
 </main>
 
@@ -348,6 +410,10 @@ async function loadImpressoes(){
     stats();
     renderFila();
     renderPastas();
+    // Selecionar trimestre atual automaticamente
+    const selTri = document.getElementById('selTrimestre');
+    if(selTri) selTri.value = getTrimestreAtual();
+    renderCotas();
     g('ultimaAtt').textContent = 'Atualizado: '+new Date().toLocaleTimeString('pt-BR');
     g('stConn').textContent='● Online';
     g('stConn').style.cssText='background:#4ade80;color:#14532d';
@@ -440,6 +506,7 @@ async function mudarStatus(id, novoStatus){
     if(item) Object.assign(item, upd);
     stats(); renderFila(); renderPastas();
     toast(novoStatus==='concluido'?'✅ Marcado como concluído!':novoStatus==='imprimindo'?'🖨️ Impressão iniciada!':'Cancelado.');
+    renderCotas();
   }catch(ex){toast('Erro: '+ex.message);}
 }
 
@@ -642,6 +709,166 @@ function aba(btn){
 
 // Auto-refresh a cada 60 segundos
 setInterval(loadImpressoes, 60000);
+
+
+/* ================================================================
+   COTAS DE IMPRESSÃO
+================================================================ */
+const COTAS = {
+  '41':300,
+  '51':300,
+  '42':300,
+  '52':300,
+  '101':300,
+  '102':300,
+  '103':300,
+  '201':300,
+  '202':300,
+  '203':300,
+  '301':300,
+  '302':300,
+  '401':300,
+  '402':300,
+  '501':300,
+  '502':300,
+  '2001':150,
+  '2003':150,
+  '2005':150,
+  '2006':150,
+  '2002':80,
+  '2004':80,
+  '2007':80,
+  '1001':50,
+  '1002':50,
+  '1003':50,
+  '1004':50,
+  '1005':50,
+  '1006':50,
+  '1007':50,
+  '1008':50,
+  '1009':50,
+  'Ed. Física':60,
+  'Artes':60,
+  'Informática':60,
+  'Projetos (Prosa)':60
+};
+
+function getTrimestreAtual(){
+  const m = new Date().getMonth()+1;
+  if(m<=4) return 1;
+  if(m<=8) return 2;
+  return 3;
+}
+
+function getDatasTrimestreAtual(tri){
+  const ano = new Date().getFullYear();
+  const meses = {1:[1,4],2:[5,8],3:[9,12]};
+  const [mi,mf] = meses[tri];
+  const ini = new Date(ano,mi-1,1).toISOString();
+  const fim = new Date(ano,mf,0,23,59,59).toISOString();
+  return {ini,fim};
+}
+
+function semaforo(pct){
+  if(pct>=90) return 'critico';
+  if(pct>=80) return 'vermelho';
+  if(pct>=50) return 'amarelo';
+  return 'verde';
+}
+
+function semaforoLabel(s){
+  return {critico:'⛔ Crítico',vermelho:'🔴 Alto',amarelo:'🟡 Médio',verde:'🟢 Normal'}[s];
+}
+
+function renderCotas(){
+  const tri = parseInt(g('selTrimestre').value)||getTrimestreAtual();
+  const {ini,fim} = getDatasTrimestreAtual(tri);
+  const busca = g('buscaCota').value.toLowerCase();
+  const fSem = g('filtroSemaforo').value;
+
+  // Filtrar impressões do trimestre
+  const imprTri = IMPRESSOES.filter(i=>
+    i.status==='concluido' &&
+    i.impresso_em >= ini && i.impresso_em <= fim
+  );
+
+  // Calcular uso por turma
+  const uso = {};
+  imprTri.forEach(i=>{
+    uso[i.turma] = (uso[i.turma]||0) + (i.quantidade_copias||1);
+  });
+
+  // Resumo geral
+  const totalUsado = Object.values(uso).reduce((a,b)=>a+b,0);
+  const totalCota = 10000;
+  const pctGeral = Math.min(100,Math.round(totalUsado/totalCota*100));
+  const semGeral = semaforo(pctGeral);
+
+  // Cards por turma
+  let cards = [];
+  for(const [turno, segs] of Object.entries(ESTRUTURA)){
+    for(const [seg, turmas] of Object.entries(segs)){
+      for(const t of turmas){
+        const cota = COTAS[t.turma]||100;
+        const usado = uso[t.turma]||0;
+        const pct = Math.min(100,Math.round(usado/cota*100));
+        const sem = semaforo(pct);
+        cards.push({...t,cota,usado,pct,sem,turno,segmento:seg});
+      }
+    }
+  }
+
+  // Filtrar
+  cards = cards.filter(c=>{
+    if(fSem && c.sem!==fSem) return false;
+    if(busca && !c.turma.toLowerCase().includes(busca) && !c.professor.toLowerCase().includes(busca)) return false;
+    return true;
+  });
+
+  // Ordenar: mais crítico primeiro
+  const pesoSem = {critico:0,vermelho:1,amarelo:2,verde:3};
+  cards.sort((a,b)=>pesoSem[a.sem]-pesoSem[b.sem]||b.pct-a.pct);
+
+  // Resumo
+  const criticos = cards.filter(c=>c.sem==='critico').length;
+  const vermelhos = cards.filter(c=>c.sem==='vermelho').length;
+  const amarelos = cards.filter(c=>c.sem==='amarelo').length;
+
+  g('cotaResumo').innerHTML = `
+    <div class="resumo-item"><div class="rn" style="color:var(--verde2)">${totalUsado.toLocaleString('pt-BR')}</div><div class="rl">Folhas usadas</div></div>
+    <div class="resumo-item"><div class="rn" style="color:var(--ink)">${(totalCota-totalUsado).toLocaleString('pt-BR')}</div><div class="rl">Disponível</div></div>
+    <div class="resumo-item"><div class="rn" style="color:${pctGeral>=80?'var(--vermelho)':pctGeral>=50?'var(--amarelo)':'var(--verde2)'}">${pctGeral}%</div><div class="rl">Usado no trimestre</div></div>
+    <div class="resumo-item"><div class="rn" style="color:var(--vermelho)">${criticos+vermelhos}</div><div class="rl">Turmas em alerta</div></div>`;
+
+  // Grid de cards
+  if(!cards.length){g('cotaGrid').innerHTML='<div class="empty">Nenhuma turma encontrada.</div>';return;}
+
+  g('cotaGrid').innerHTML = cards.map(c=>{
+    const largura = Math.min(100,c.pct);
+    const corFill = `fill-${c.sem}`;
+    const corCard = c.sem;
+    const badge = `badge-${c.sem}`;
+    const restante = c.cota - c.usado;
+    return `<div class="cota-card ${corCard}">
+      <div class="cota-topo">
+        <div>
+          <div class="cota-turma">Turma ${e(c.turma)}</div>
+          <div class="cota-prof">Prof. ${e(c.professor)} · ${e(c.turno)}</div>
+        </div>
+        <span class="cota-badge ${badge}">${semaforoLabel(c.sem)}</span>
+      </div>
+      <div class="barra-bg"><div class="barra-fill ${corFill}" style="width:${largura}%"></div></div>
+      <div class="cota-nums">
+        <span>${c.usado} folhas usadas</span>
+        <span>${c.pct}% da cota</span>
+      </div>
+      <div style="font-size:.75rem;color:#778;margin-top:4px">
+        Cota: ${c.cota} folhas · ${restante>0?restante+' restantes':'⛔ cota esgotada'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 
 (async()=>{
   popularProfessores();
