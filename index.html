@@ -232,15 +232,38 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
         <input type="text" id="nomeEscola" value="E.M Regina Celi Whatsapp"
           style="margin-top:6px;width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:.85rem">
       </div>
+      <div style="margin-top:10px;background:#fff8e1;border:1px solid #f0cc6e;border-radius:8px;padding:10px 14px;font-size:.85rem">
+        <b>📅 Importar mensagens a partir de:</b>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap">
+          <input type="date" id="filtroData"
+            style="padding:7px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:.85rem;flex:1">
+          <button class="bs sm" onclick="document.getElementById('filtroData').value=''"
+            style="white-space:nowrap">✕ Sem filtro</button>
+        </div>
+        <div style="color:#92400e;font-size:.78rem;margin-top:6px">
+          ⚠️ Deixe em branco para importar todo o histórico. Recomendamos filtrar pelo início do ano letivo atual.
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button class="bs sm" onclick="setFiltroData(0)">📅 Hoje</button>
+          <button class="bs sm" onclick="setFiltroData(7)">📅 Última semana</button>
+          <button class="bs sm" onclick="setFiltroData(30)">📅 Último mês</button>
+          <button class="bs sm" onclick="setFiltroData(180)">📅 Últimos 6 meses</button>
+          <button class="bs sm" onclick="setFiltroInicio2026()">📅 Início 2026</button>
+        </div>
+      </div>
     </div>
 
     <div id="importPreview" style="display:none">
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         <div id="importInfo" style="font-size:.9rem;color:var(--verde);font-weight:700"></div>
+        <div style="font-size:.78rem;color:#778;margin-top:4px">
+          💡 Selecione várias mensagens do mesmo responsável e clique em <b>🔗 Juntar</b> para unir em um único registro
+        </div>
         <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
           <button class="bs sm" onclick="selecionarTodas(true)">☑ Todas</button>
           <button class="bs sm" onclick="selecionarTodas(false)">☐ Nenhuma</button>
           <button class="bs sm" onclick="selecionarUrgentes()">🔴 Só urgentes</button>
+          <button class="bs sm" onclick="juntarSelecionadas()" style="background:#fff8e1;border:1.5px solid #f0cc6e;color:#92400e;font-weight:700">🔗 Juntar selecionadas</button>
           <button class="bp" onclick="salvarSelecionadas()" id="btnSalvar">💾 Salvar selecionadas no banco</button>
         </div>
       </div>
@@ -915,10 +938,32 @@ function lerTxt(ev){
     IMPORT_MSGS = msgs;
     renderImport();
     g('importPreview').style.display = 'block';
-    g('importInfo').textContent = msgs.length + ' mensagens de "' + origem + '" — selecione as que deseja salvar';
+    const filtroDataVal2 = document.getElementById('filtroData').value;
+    const periodoStr = filtroDataVal2 ? ' (a partir de '+new Date(filtroDataVal2+'T00:00:00').toLocaleDateString('pt-BR')+')' : ' (histórico completo)';
+    g('importInfo').textContent = msgs.length + ' mensagens de "' + origem + '"' + periodoStr + ' — selecione as que deseja salvar';
   };
   reader.readAsText(file, 'UTF-8');
   if(ev.target) ev.target.value = '';
+}
+
+function setFiltroData(diasAtras){
+  const d = new Date();
+  d.setDate(d.getDate() - diasAtras);
+  document.getElementById('filtroData').value = d.toISOString().slice(0,10);
+}
+function setFiltroInicio2026(){
+  document.getElementById('filtroData').value = '2026-01-01';
+}
+
+function parseDateBR(dataBR){
+  // Converte dd/mm/yyyy ou dd/mm/yy para objeto Date
+  const parts = dataBR.split('/');
+  if(parts.length < 3) return null;
+  let ano = parseInt(parts[2]);
+  if(ano < 100) ano += 2000;
+  const mes = parseInt(parts[1]) - 1;
+  const dia = parseInt(parts[0]);
+  return new Date(ano, mes, dia);
 }
 
 function parseTxt(txt, origem){
@@ -939,9 +984,19 @@ function parseTxt(txt, origem){
   }
   if(atual) msgs.push(atual);
   
+  // Filtro de data
+  const filtroDataVal = document.getElementById('filtroData').value;
+  const filtroDataObj = filtroDataVal ? new Date(filtroDataVal + 'T00:00:00') : null;
+
   return msgs
     .filter(m => !ignorar.some(ig => m.texto.toLowerCase().includes(ig)))
     .filter(m => !m.autor.toLowerCase().includes(nomeEscola))
+    .filter(m => {
+      if(!filtroDataObj) return true;
+      const dataMsg = parseDateBR(m.data);
+      if(!dataMsg) return true;
+      return dataMsg >= filtroDataObj;
+    })
     .map((m, i) => {
       const c = clf(m.texto);
       return {...m, id:'imp_'+i, categoria:c.categoria, urgencia:c.urgencia, sel:true};
@@ -962,6 +1017,7 @@ function renderImport(){
           <span style="font-weight:700;font-size:.9rem">${e(m.autor)}</span>
           <span style="font-size:.75rem;color:#99a">${e(m.data)} ${e(m.hora)}</span>
           <span class="chip ${m.urgencia}" style="font-size:.65rem">${m.urgencia==='alta'?'🔴 Alta':m.urgencia==='media'?'🟡 Média':'🟢 Baixa'}</span>
+          ${m.juntada?`<span style="background:#fff8e1;border:1px solid #f0cc6e;color:#92400e;font-size:.68rem;font-weight:700;padding:2px 7px;border-radius:20px">🔗 ${m.qtd} msgs unidas</span>`:''}
         </div>
         <div class="itx" onclick="this.classList.toggle('exp')">${e(m.texto)}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
@@ -984,6 +1040,56 @@ function mudarCatImp(id, val){ const m=IMPORT_MSGS.find(x=>x.id===id); if(m) m.c
 function mudarUrgImp(id, val){ const m=IMPORT_MSGS.find(x=>x.id===id); if(m){ m.urgencia=val; const c=g('icard-'+id); if(c){c.className='imp-card '+val;} } }
 function selecionarTodas(v){ IMPORT_MSGS.forEach(m=>m.sel=v); renderImport(); }
 function selecionarUrgentes(){ IMPORT_MSGS.forEach(m=>m.sel=(m.urgencia==='alta'||m.urgencia==='media')); renderImport(); }
+
+function juntarSelecionadas(){
+  const sel = IMPORT_MSGS.filter(m => m.sel);
+  if(sel.length < 2){
+    toast('Selecione ao menos 2 mensagens para juntar.');
+    return;
+  }
+
+  // Verificar se são do mesmo autor
+  const autores = [...new Set(sel.map(m => m.autor))];
+  if(autores.length > 1){
+    const continuar = confirm(
+      `As mensagens selecionadas são de ${autores.length} autores diferentes:\n${autores.join(', ')}\n\nDeseja juntar mesmo assim?`
+    );
+    if(!continuar) return;
+  }
+
+  // Ordenar por data/hora antes de juntar
+  sel.sort((a,b) => {
+    const da = parseDateBR(a.data), db2 = parseDateBR(b.data);
+    if(!da || !db2) return 0;
+    if(da.getTime() !== db2.getTime()) return da - db2;
+    return a.hora.localeCompare(b.hora);
+  });
+
+  // Criar mensagem unificada
+  const textoUnido = sel.map(m => m.texto.trim()).join('\n');
+  const c = clf(textoUnido);
+  const msgUnida = {
+    id: 'imp_juntada_' + Date.now(),
+    data: sel[0].data,
+    hora: sel[0].hora,
+    autor: sel[0].autor,
+    origem: sel[0].origem,
+    texto: textoUnido,
+    categoria: c.categoria,
+    urgencia: c.urgencia,
+    sel: true,
+    juntada: true,
+    qtd: sel.length
+  };
+
+  // Remover as mensagens originais e adicionar a unificada
+  const idsRemover = new Set(sel.map(m => m.id));
+  IMPORT_MSGS = IMPORT_MSGS.filter(m => !idsRemover.has(m.id));
+  IMPORT_MSGS.unshift(msgUnida); // colocar no topo
+
+  renderImport();
+  toast(`✅ ${sel.length} mensagens unidas em 1 registro · categoria: ${c.categoria}`);
+}
 
 async function salvarSelecionadas(){
   const sel = IMPORT_MSGS.filter(m=>m.sel);
