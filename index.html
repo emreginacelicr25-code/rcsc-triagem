@@ -85,6 +85,9 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
 .loading{text-align:center;padding:30px;color:#778}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:.88rem;opacity:0;transition:.25s;z-index:300;pointer-events:none}
 .toast.show{opacity:1}
+.mini-barra-bg{background:#e5e7eb;border-radius:20px;height:6px;overflow:hidden;display:inline-block;width:60px;vertical-align:middle;margin:0 6px}
+.mini-barra-fill{height:100%;border-radius:20px}
+.mf-verde{background:#22c55e}.mf-amarelo{background:#f59e0b}.mf-vermelho{background:#ef4444}.mf-critico{background:#7f1d1d}
 .tcard{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:0 2px 8px var(--shadow);display:flex;flex-direction:column;gap:12px}
 .tcard h4{color:var(--verde);font-size:1rem;font-weight:700;padding-bottom:10px;border-bottom:2px solid var(--verde3);display:flex;align-items:center;gap:8px}
 .tcard textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:14px;font:inherit;font-size:.92rem;min-height:220px;resize:vertical;background:#fafaf8;line-height:1.75;color:var(--ink);flex:1}
@@ -131,6 +134,15 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       <div class="stat alta"><div class="num" id="sA">—</div><div class="lbl">Urgência alta</div></div>
       <div class="stat media"><div class="num" id="sM">—</div><div class="lbl">Atenção média</div></div>
       <div class="stat ok"><div class="num" id="sC">—</div><div class="lbl">Concluídos</div></div>
+    </div>
+    <!-- Mini painel de cotas de impressão -->
+    <div id="miniCotas" style="display:none;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 4px var(--shadow)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:.88rem;font-weight:700;color:var(--verde)">🖨️ Cotas de impressão — Trimestre atual</div>
+        <a href="https://emreginacelicr25-code.github.io/rcsc-triagem/impressao.html" target="_blank"
+          style="font-size:.78rem;color:var(--verde2);text-decoration:none;font-weight:600">Ver fila completa →</a>
+      </div>
+      <div id="miniCotasConteudo" style="font-size:.82rem;color:#778">Carregando cotas...</div>
     </div>
     <div class="toolbar">
       <input type="text" id="busca" placeholder="Buscar por nome, texto, turma…" oninput="renderD()">
@@ -1244,9 +1256,81 @@ async function salvarSelecionadas(){
   setTimeout(()=>abaId('painel'), 1500);
 }
 
+
+/* ================================================================
+   MINI PAINEL DE COTAS (no sistema de triagem)
+================================================================ */
+const COTAS_IMP = {'41':300,'51':300,'42':300,'52':300,'101':300,'102':300,'103':300,'201':300,'202':300,'203':300,'301':300,'302':300,'401':300,'402':300,'501':300,'502':300,'2001':150,'2003':150,'2005':150,'2006':150,'2002':80,'2004':80,'2007':80,'1001':50,'1002':50,'1003':50,'1004':50,'1005':50,'1006':50,'1007':50,'1008':50,'1009':50,'Ed. Física':60,'Artes':60,'Informática':60,'Projetos (Prosa)':60};
+
+async function carregarMiniCotas(){
+  try{
+    const ano = new Date().getFullYear();
+    const m = new Date().getMonth()+1;
+    const tri = m<=4?1:m<=8?2:3;
+    const meses = {1:[1,4],2:[5,8],3:[9,12]};
+    const [mi,mf] = meses[tri];
+    const ini = new Date(ano,mi-1,1).toISOString();
+    const fim = new Date(ano,mf,0,23,59,59).toISOString();
+
+    const impr = await db('impressoes','GET',null,
+      `?status=eq.concluido&impresso_em=gte.${ini}&impresso_em=lte.${fim}&select=turma,quantidade_copias`);
+
+    const uso = {};
+    impr.forEach(i=>{ uso[i.turma]=(uso[i.turma]||0)+(i.quantidade_copias||1); });
+
+    const totalUsado = Object.values(uso).reduce((a,b)=>a+b,0);
+    const totalCota = 10000;
+    const pctGeral = Math.min(100,Math.round(totalUsado/totalCota*100));
+
+    // Turmas em alerta
+    const alertas = Object.entries(uso)
+      .map(([turma,qtd])=>{
+        const cota=COTAS_IMP[turma]||100;
+        const pct=Math.min(100,Math.round(qtd/cota*100));
+        return {turma,qtd,cota,pct};
+      })
+      .filter(t=>t.pct>=80)
+      .sort((a,b)=>b.pct-a.pct)
+      .slice(0,5);
+
+    const corGeral = pctGeral>=90?'#7f1d1d':pctGeral>=80?'#b23a3a':pctGeral>=50?'#c98a1e':'#2a4f45';
+    const corFill = pctGeral>=90?'mf-critico':pctGeral>=80?'mf-vermelho':pctGeral>=50?'mf-amarelo':'mf-verde';
+
+    let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      <span style="font-weight:700;color:${corGeral}">${totalUsado.toLocaleString('pt-BR')} / ${totalCota.toLocaleString('pt-BR')} folhas (${pctGeral}%)</span>
+      <div class="mini-barra-bg" style="width:120px"><div class="mini-barra-fill ${corFill}" style="width:${pctGeral}%;height:100%"></div></div>
+      <span style="color:#778">${(totalCota-totalUsado).toLocaleString('pt-BR')} restantes · ${tri}º Trimestre</span>
+    </div>`;
+
+    if(alertas.length){
+      html += `<div style="color:#778;font-size:.78rem;margin-bottom:4px;font-weight:700;text-transform:uppercase;letter-spacing:.3px">⚠️ Turmas em alerta</div>`;
+      html += alertas.map(t=>{
+        const cor = t.pct>=90?'#7f1d1d':'#b23a3a';
+        const corF = t.pct>=90?'mf-critico':'mf-vermelho';
+        return `<span style="display:inline-flex;align-items:center;gap:6px;background:#fee2e2;border-radius:20px;padding:3px 10px;margin:2px;font-size:.78rem">
+          <strong style="color:${cor}">Turma ${t.turma}</strong>
+          <div class="mini-barra-bg" style="width:40px"><div class="mini-barra-fill ${corF}" style="width:${t.pct}%;height:100%"></div></div>
+          <span style="color:${cor}">${t.pct}%</span>
+        </span>`;
+      }).join('');
+    } else if(totalUsado>0){
+      html += `<span style="color:#15803d;font-size:.82rem">✅ Todas as turmas dentro da cota normal</span>`;
+    } else {
+      html += `<span style="color:#778;font-size:.82rem">Nenhuma impressão registrada neste trimestre ainda.</span>`;
+    }
+
+    g('miniCotasConteudo').innerHTML = html;
+    g('miniCotas').style.display = 'block';
+  }catch(ex){
+    // Falha silenciosa — cotas são secundárias
+    console.warn('Mini cotas:', ex.message);
+  }
+}
+
+
 (async()=>{
   const now=new Date();g('fD').value=now.toISOString().slice(0,10);g('fH').value=now.toTimeString().slice(0,5);
-  await loadD();await loadA();renderTemplates();
+  await loadD();await loadA();renderTemplates();carregarMiniCotas();
 })();
 </script>
 </body>
