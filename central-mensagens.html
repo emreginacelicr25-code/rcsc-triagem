@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Central de Mensagens - WhatsApp</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
+h1 { color: #222; }
+.msg { background: white; border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.msg .topo { display: flex; justify-content: space-between; font-size: 0.85em; color: #666; }
+.msg .texto { margin: 8px 0; font-size: 1.05em; }
+.status { padding: 4px 10px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
+.novo { background: #ffe0e0; color: #b30000; }
+.em_andamento { background: #fff3cd; color: #856404; }
+.respondido { background: #d4edda; color: #155724; }
+select { margin-top: 8px; padding: 4px; }
+#carregando { color: #666; }
+</style>
+</head>
+<body>
+<h1>Central de Mensagens — WhatsApp</h1>
+<div id="carregando">Carregando mensagens...</div>
+<div id="lista"></div>
+
+<script>
+const SUPABASE_URL = "https://wulihgevyzzhysnxzhoy.supabase.co";
+const SUPABASE_KEY = "sb_publishable_YTaSssCbwiudqrAoRx2YpA_CrEhc4Sb";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function carregarMensagens() {
+  const { data, error } = await supabase
+    .from("mensagens_whatsapp")
+    .select("*")
+    .order("timestamp_whatsapp", { ascending: false });
+
+  const lista = document.getElementById("lista");
+  const carregando = document.getElementById("carregando");
+  carregando.style.display = "none";
+
+  if (error) {
+    lista.innerHTML = "<p>Erro ao carregar mensagens: " + error.message + "</p>";
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    lista.innerHTML = "<p>Nenhuma mensagem recebida ainda.</p>";
+    return;
+  }
+
+  lista.innerHTML = data.map(msg => `
+    <div class="msg" data-id="${msg.id}">
+      <div class="topo">
+        <span>${msg.nome_contato || "Sem nome"} — ${msg.telefone}</span>
+        <span>${new Date(msg.timestamp_whatsapp).toLocaleString("pt-BR")}</span>
+      </div>
+      <div class="texto">${msg.texto || "(mensagem sem texto)"}</div>
+      <span class="status ${msg.status}">${msg.status}</span>
+      <select onchange="atualizarStatus('${msg.id}', this.value)">
+        <option value="novo" ${msg.status === "novo" ? "selected" : ""}>Novo</option>
+        <option value="em_andamento" ${msg.status === "em_andamento" ? "selected" : ""}>Em andamento</option>
+        <option value="respondido" ${msg.status === "respondido" ? "selected" : ""}>Respondido</option>
+      </select>
+    </div>
+  `).join("");
+}
+
+async function atualizarStatus(id, novoStatus) {
+  await supabase.from("mensagens_whatsapp").update({ status: novoStatus }).eq("id", id);
+  carregarMensagens();
+}
+
+carregarMensagens();
+</script>
+</body>
+</html>
