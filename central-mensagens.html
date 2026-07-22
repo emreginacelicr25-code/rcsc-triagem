@@ -1,9 +1,9 @@
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <title>Central de Mensagens - WhatsApp</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 20px; }
 h1 { color: #222; }
@@ -15,60 +15,60 @@ h1 { color: #222; }
 .em_andamento { background: #fff3cd; color: #856404; }
 .respondido { background: #d4edda; color: #155724; }
 select { margin-top: 8px; padding: 4px; }
-#carregando { color: #666; }
+#status-carregamento { color: #666; }
+#erro { color: #b30000; background: #ffe0e0; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
 </style>
 </head>
 <body>
 <h1>Central de Mensagens — WhatsApp</h1>
-<div id="carregando">Carregando mensagens...</div>
+<div id="status-carregamento">Carregando script...</div>
 <div id="lista"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-const SUPABASE_URL = "https://wulihgevyzzhysnxzhoy.supabase.co";
-const SUPABASE_KEY = "sb_publishable_YTaSssCbwiudqrAoRx2YpA_CrEhc4Sb";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const statusEl = document.getElementById("status-carregamento");
+const listaEl = document.getElementById("lista");
 
-async function carregarMensagens() {
-  const { data, error } = await supabase
-    .from("mensagens_whatsapp")
-    .select("*")
-    .order("timestamp_whatsapp", { ascending: false });
-
-  const lista = document.getElementById("lista");
-  const carregando = document.getElementById("carregando");
-  carregando.style.display = "none";
-
-  if (error) {
-    lista.innerHTML = "<p>Erro ao carregar mensagens: " + error.message + "</p>";
-    return;
-  }
-
-  if (!data || data.length === 0) {
-    lista.innerHTML = "<p>Nenhuma mensagem recebida ainda.</p>";
-    return;
-  }
-
-  lista.innerHTML = data.map(msg => `
-    <div class="msg" data-id="${msg.id}">
-      <div class="topo">
-        <span>${msg.nome_contato || "Sem nome"} — ${msg.telefone}</span>
-        <span>${new Date(msg.timestamp_whatsapp).toLocaleString("pt-BR")}</span>
-      </div>
-      <div class="texto">${msg.texto || "(mensagem sem texto)"}</div>
-      <span class="status ${msg.status}">${msg.status}</span>
-      <select onchange="atualizarStatus('${msg.id}', this.value)">
-        <option value="novo" ${msg.status === "novo" ? "selected" : ""}>Novo</option>
-        <option value="em_andamento" ${msg.status === "em_andamento" ? "selected" : ""}>Em andamento</option>
-        <option value="respondido" ${msg.status === "respondido" ? "selected" : ""}>Respondido</option>
-      </select>
-    </div>
-  `).join("");
+function mostrarErro(msg) {
+  statusEl.innerHTML = '<div id="erro">Erro: ' + msg + '</div>';
 }
 
-async function atualizarStatus(id, novoStatus) {
-  await supabase.from("mensagens_whatsapp").update({ status: novoStatus }).eq("id", id);
-  carregarMensagens();
-}
+try {
+  if (typeof window.supabase === "undefined") {
+    mostrarErro("A biblioteca do Supabase não carregou (CDN bloqueado ou sem internet).");
+  } else {
+    statusEl.textContent = "Conectando ao banco...";
+    const SUPABASE_URL = "https://wulihgevyzzhysnxzhoy.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_YTaSssCbwiudqrAoRx2YpA_CrEhc4Sb";
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-carregarMensagens();
+    client.from("mensagens_whatsapp").select("*").order("timestamp_whatsapp", { ascending: false })
+      .then(({ data, error }) => {
+        if (error) {
+          mostrarErro(JSON.stringify(error, null, 2));
+          return;
+        }
+        statusEl.style.display = "none";
+        if (!data || data.length === 0) {
+          listaEl.innerHTML = "<p>Nenhuma mensagem recebida ainda.</p>";
+          return;
+        }
+        listaEl.innerHTML = data.map(msg => `
+          <div class="msg">
+            <div class="topo">
+              <span>${msg.nome_contato || "Sem nome"} — ${msg.telefone}</span>
+              <span>${new Date(msg.timestamp_whatsapp).toLocaleString("pt-BR")}</span>
+            </div>
+            <div class="texto">${msg.texto || "(sem texto)"}</div>
+            <span class="status ${msg.status}">${msg.status}</span>
+          </div>
+        `).join("");
+      })
+      .catch(e => mostrarErro(e.message || String(e)));
+  }
+} catch (e) {
+  mostrarErro(e.message || String(e));
+}
 </script>
+</body>
+</html>
