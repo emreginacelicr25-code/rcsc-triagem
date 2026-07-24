@@ -123,6 +123,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
     <button class="tab active" data-v="painel" onclick="aba(this)">📋 Painel</button>
     <button class="tab" data-v="registrar" onclick="aba(this)">✏️ Registrar</button>
     <button class="tab" data-v="alunos" onclick="aba(this)">👨‍🎓 Alunos</button>
+    <button class="tab" data-v="professores" onclick="aba(this)">👨‍🏫 Professores</button>
     <button class="tab" data-v="importar" onclick="aba(this)">📲 Importar WhatsApp</button>
     <button class="tab" data-v="automaticas" onclick="aba(this)">📢 Mensagens automáticas</button>
   </div>
@@ -209,6 +210,23 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       <div style="margin-top:14px"><button class="bp" onclick="salvarA()">💾 Cadastrar aluno</button></div>
     </div>
     <div id="listaA"><div class="loading">Carregando...</div></div>
+  </section>
+
+  <!-- PROFESSORES -->
+  <section class="view" id="view-professores">
+    <div class="fcard">
+      <h3>👨‍🏫 Cadastro de Professores</h3>
+      <div class="fg">
+        <div class="f"><label>Nome completo</label><input type="text" id="pNm" placeholder="Nome do professor(a)"></div>
+        <div class="f"><label>Telefone/WhatsApp *</label><input type="text" id="pTf" placeholder="(21) 99999-9999"></div>
+        <div class="f"><label>Turma</label><input type="text" id="pTm" placeholder="Ex: 3º Ano A"></div>
+        <div class="f"><label>Turno</label><select id="pTn"><option value="">—</option><option>Manhã</option><option>Tarde</option><option>Integral</option></select></div>
+        <div class="f"><label>Segmento</label><input type="text" id="pSg" placeholder="Ex: Educação Infantil, AEE..."></div>
+      </div>
+      <div style="margin-top:14px"><button class="bp" onclick="salvarP()">💾 Cadastrar professor(a)</button></div>
+    </div>
+    <div class="toolbar"><input type="text" id="pBusca" placeholder="Buscar professor(a)..." oninput="renderP()"></div>
+    <div id="listaP"><div class="loading">Carregando...</div></div>
   </section>
 
   <!-- MENSAGENS AUTOMÁTICAS -->
@@ -490,6 +508,36 @@ function buscaA(q){
     res.map(a=>`<div style="padding:8px 12px;cursor:pointer;font-size:.88rem" onclick="selA('${a.id}')" onmouseover="this.style.background='#f0f7f5'" onmouseout="this.style.background=''">${e(a.nome)} <span style="color:#778">${e(a.turma||'')}</span></div>`).join('')+'</div>';
 }
 function selA(id){const a=AA.find(x=>x.id===id);if(!a)return;g('fAl').value=a.nome;g('fTm').value=a.turma||'';g('aluSug').innerHTML='';}
+
+/* PROFESSORES */
+let PP=[];
+async function loadP(){try{PP=await db('professores_contatos','GET',null,'?order=professor.asc');renderP();}catch(e){g('listaP').innerHTML='<div class="empty">Erro: '+e.message+'</div>';}}
+async function salvarP(){
+  const p={professor:g('pNm').value.trim(),telefone:g('pTf').value.trim(),
+    turma:g('pTm').value.trim()||null,turno:g('pTn').value||null,segmento:g('pSg').value.trim()||null,ativo:true};
+  if(!p.professor){toast('Informe o nome.');return;}
+  if(!p.telefone){toast('Informe o telefone/WhatsApp.');return;}
+  try{await db('professores_contatos','POST',p);toast('✅ Professor(a) cadastrado(a)!');['pNm','pTf','pTm','pSg'].forEach(id=>g(id).value='');g('pTn').value='';await loadP();}catch(ex){toast('Erro: '+(ex.message.includes('duplicate')?'Já existe um cadastro com esse telefone.':ex.message));}
+}
+function renderP(){
+  const cont=g('listaP');
+  const q=(g('pBusca')?g('pBusca').value:'').toLowerCase().trim();
+  const lista=q?PP.filter(p=>p.professor.toLowerCase().includes(q)):PP;
+  if(!lista.length){cont.innerHTML='<div class="empty">👨‍🏫 Nenhum professor(a).</div>';return;}
+  cont.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">`+
+    lista.map(p=>`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:12px;box-shadow:0 1px 4px var(--shadow);opacity:${p.ativo?1:.55}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+        <div style="font-weight:700">${e(p.professor)}</div>
+        <span class="chip ${p.ativo?'baixa':'aberto'}" style="flex-shrink:0">${p.ativo?'Ativo':'Inativo'}</span>
+      </div>
+      <div style="font-size:.8rem;color:#778;margin-top:2px">📞 ${e(p.telefone)}</div>
+      ${(p.turma||p.turno||p.segmento)?`<div style="font-size:.8rem;color:#778;margin-top:2px">${[p.turma,p.turno,p.segmento].filter(Boolean).map(e).join(' · ')}</div>`:''}
+      <div style="margin-top:8px"><button class="sm ${p.ativo?'bs':'bp'}" onclick="toggleP('${p.id}',${p.ativo})">${p.ativo?'Desativar':'Ativar'}</button></div>
+    </div>`).join('')+'</div>';
+}
+async function toggleP(id,ativo){
+  try{await db('professores_contatos','PATCH',{ativo:!ativo,atualizado_em:new Date().toISOString()},`?id=eq.${id}`);const p=PP.find(x=>x.id===id);if(p)p.ativo=!ativo;renderP();toast(ativo?'Professor(a) desativado(a).':'Professor(a) ativado(a).');}catch(ex){toast('Erro: '+ex.message);}
+}
 
 /* DOCUMENTOS */
 function cab(n){return`<div style="display:flex;align-items:center;gap:14px;border-bottom:2.5px solid #2a4f45;padding-bottom:12px;margin-bottom:16px">
@@ -1424,7 +1472,7 @@ async function enviarResposta(){
 
 (async()=>{
   const now=new Date();g('fD').value=now.toISOString().slice(0,10);g('fH').value=now.toTimeString().slice(0,5);
-  await loadD();await loadA();renderTemplates();carregarMiniCotas();
+  await loadD();await loadA();await loadP();renderTemplates();carregarMiniCotas();
 })();
 </script>
 
@@ -1437,6 +1485,7 @@ async function enviarResposta(){
   font-weight:700;font-size:.82rem;padding:8px 12px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .modo-consulta .tab[data-v="registrar"],
 .modo-consulta .tab[data-v="alunos"],
+.modo-consulta .tab[data-v="professores"],
 .modo-consulta .tab[data-v="importar"],
 .modo-consulta .tab[data-v="automaticas"]{display:none!important}
 </style>
@@ -1460,7 +1509,7 @@ async function enviarResposta(){
   // Neutraliza todas as funções de escrita/edição/exclusão
   ['salvarD','salvarA','salvarEd','salvarSelecionadas','delD','abrirEnvioImpressao',
    'confirmarEnvioImpressao','juntarSelecionadas','selecionarTodas','selecionarUrgentes',
-   'autoClass','gerarDoc'].forEach(function(fn){
+   'autoClass','gerarDoc','salvarP','toggleP'].forEach(function(fn){
     if(typeof window[fn]==='function') window[fn]=bloqueado;
   });
 
