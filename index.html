@@ -478,23 +478,50 @@ function abrirD(id){
       <div class="f full"><label>Observações</label><textarea id="dOb" style="min-height:60px">${e(d.observacoes||'')}</textarea></div>
     </div>
     <div style="margin-top:20px">
+      <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#556;margin-bottom:8px">💬 Conversa</div>
+      <div id="conv-${id}" style="background:var(--paper);border-radius:8px;padding:12px 14px;min-height:40px;display:flex;flex-direction:column;gap:8px">
+        <div style="color:#778;font-size:.82rem;font-style:italic">Carregando...</div>
+      </div>
+    </div>
+    <div style="margin-top:20px">
       <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#556;margin-bottom:8px">📋 Histórico de ações</div>
       <div id="hist-${id}" style="background:var(--paper);border-radius:8px;padding:10px 14px;min-height:40px">
         <div style="color:#778;font-size:.82rem;font-style:italic">Carregando...</div>
       </div>
     </div>`;
   // Buscar histórico da demanda
-  let histHtml = '<div style="color:#778;font-size:.85rem;padding:10px 0">Carregando histórico...</div>';
   g('mFoot').innerHTML=`<button class="bs" onclick="fecharM()">Fechar</button><button class="bp" onclick="salvarEd('${id}')">💾 Salvar</button>`;
-  // Carregar histórico assíncrono
-  db('historico_demandas','GET',null,`?demanda_id=eq.${id}&order=criado_em.desc`).then(hist=>{
-    const hEl = document.getElementById('hist-${id}');
+  // Carregar histórico assíncrono (usado tanto pela conversa quanto pelo log geral de ações)
+  db('historico_demandas','GET',null,`?demanda_id=eq.${id}&order=criado_em.asc`).then(hist=>{
+    const cEl = document.getElementById(`conv-${id}`);
+    const hEl = document.getElementById(`hist-${id}`);
+    const respostas = (hist||[]).filter(h=>h.acao==='resposta_whatsapp');
+
+    if(cEl){
+      const bolhaResp=(t,quando)=>`<div style="align-self:flex-start;max-width:85%;background:#fff;border:1px solid var(--line);border-radius:10px 10px 10px 2px;padding:8px 12px">
+        <div style="font-size:.85rem;white-space:pre-wrap">${e(t)}</div>
+        <div style="font-size:.68rem;color:#99a;margin-top:3px">${e(d.autor)} · ${quando}</div>
+      </div>`;
+      const bolhaEscola=(t,quando)=>`<div style="align-self:flex-end;max-width:85%;background:#dcf8c6;border-radius:10px 10px 2px 10px;padding:8px 12px">
+        <div style="font-size:.85rem;white-space:pre-wrap">${e(t)}</div>
+        <div style="font-size:.68rem;color:#5a7;margin-top:3px;text-align:right">Escola · ${quando}</div>
+      </div>`;
+      const midiaConv=midiaHTML(d);
+      const quandoOriginal=(d.data_msg||d.criado_em?.slice(0,10)||'')+' '+(d.hora_msg||d.criado_em?.slice(11,16)||'');
+      let convHtml = midiaConv
+        ? `<div style="align-self:flex-start;max-width:85%">${midiaConv}${bolhaResp(d.texto||'',quandoOriginal)}</div>`
+        : bolhaResp(d.texto||'',quandoOriginal);
+      convHtml+=respostas.map(h=>bolhaEscola(h.detalhe||'',new Date(h.criado_em).toLocaleString('pt-BR'))).join('');
+      cEl.innerHTML=convHtml;
+    }
+
     if(!hEl) return;
-    if(!hist||!hist.length){hEl.innerHTML='<div style="color:#778;font-size:.82rem;font-style:italic">Nenhum histórico ainda.</div>';return;}
-    hEl.innerHTML = hist.map(h=>`
+    const histOrdenado=[...(hist||[])].reverse();
+    if(!histOrdenado.length){hEl.innerHTML='<div style="color:#778;font-size:.82rem;font-style:italic">Nenhum histórico ainda.</div>';return;}
+    hEl.innerHTML = histOrdenado.map(h=>`
       <div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:.82rem">
-        <div style="font-weight:700;color:var(--verde2)">${h.acao}</div>
-        <div style="color:#778;font-size:.75rem">${new Date(h.criado_em).toLocaleString('pt-BR')} ${h.detalhe?'· '+h.detalhe:''}</div>
+        <div style="font-weight:700;color:var(--verde2)">${h.acao==='resposta_whatsapp'?'Resposta enviada via WhatsApp':h.acao}</div>
+        <div style="color:#778;font-size:.75rem">${new Date(h.criado_em).toLocaleString('pt-BR')} ${h.acao!=='resposta_whatsapp'&&h.detalhe?'· '+h.detalhe:''}</div>
       </div>`).join('');
   }).catch(()=>{});
   g('mBg').classList.add('open');
@@ -1486,12 +1513,13 @@ async function enviarResposta(){
     const r = await fetch(`${SU}/functions/v1/enviar-mensagem`,{
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'x-access-key': TRIAGEM_ACCESS_KEY },
-      body: JSON.stringify({ telefone: respostaAtual.telefone, texto })
+      body: JSON.stringify({ telefone: respostaAtual.telefone, texto, demanda_id: respostaAtual.id })
     });
     const j = await r.json();
     if(!r.ok || j.erro) throw new Error(j.erro || 'Erro ao enviar');
     toast('✅ Mensagem enviada!');
     fecharResposta();
+    if(document.getElementById('mBg')?.classList.contains('open')) abrirD(respostaAtual.id);
   }catch(ex){
     toast('Erro: '+ex.message);
   }finally{
