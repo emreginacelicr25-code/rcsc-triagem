@@ -150,6 +150,10 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       <select id="fUrg" onchange="renderD()"><option value="">Toda urgência</option><option value="alta">🔴 Alta</option><option value="media">🟡 Média</option><option value="baixa">🟢 Baixa</option></select>
       <select id="fSt" onchange="renderD()"><option value="">Todos os status</option><option value="aberto">Aberto</option><option value="em_andamento">Em andamento</option><option value="concluido">Concluído</option></select>
       <select id="fCat" onchange="renderD()"><option value="">Todas as categorias</option></select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:#556;white-space:nowrap;cursor:pointer;user-select:none">
+        <input type="checkbox" id="fOcultarImp" onchange="toggleImportadas()" style="cursor:pointer">
+        Ocultar importadas
+      </label>
       <button class="bs sm" onclick="loadD()">↺ Atualizar</button>
     </div>
     <div id="listaD"><div class="loading">Carregando...</div></div>
@@ -359,10 +363,13 @@ function autoClass(){const tx=g('fTx').value;if(!tx.trim()){toast('Digite o text
 async function loadD(){
   try{g('listaD').innerHTML='<div class="loading">Carregando...</div>';
     DD=await db('demandas','GET',null,'?order=criado_em.desc&limit=300');
+    const chkImp=g('fOcultarImp');
+    if(chkImp){const salvo=localStorage.getItem('ocultarImportadas');chkImp.checked=(salvo===null?true:salvo==='1');}
     stats();renderD();catFiltro();
     g('stConn').textContent='● Online';g('stConn').style.cssText='background:#4ade80;color:#14532d';
   }catch(e){g('listaD').innerHTML=`<div class="empty">⚠️ Erro: ${e.message}</div>`;g('stConn').textContent='● Offline';}
 }
+function toggleImportadas(){localStorage.setItem('ocultarImportadas',g('fOcultarImp').checked?'1':'0');renderD();}
 async function loadA(){try{AA=await db('alunos','GET',null,'?order=nome.asc&ativo=eq.true');renderA();}catch(e){g('listaA').innerHTML='<div class="empty">Erro: '+e.message+'</div>';}}
 
 function stats(){
@@ -375,7 +382,9 @@ function catFiltro(){const s=g('fCat'),cur=s.value,cats=[...new Set(DD.map(d=>d.
 
 function renderD(){
   const bu=g('busca').value.toLowerCase(),fu=g('fUrg').value,fs=g('fSt').value,fc=g('fCat').value;
+  const ocultarImp=g('fOcultarImp')?g('fOcultarImp').checked:false;
   let L=DD.filter(d=>{
+    if(ocultarImp&&!d.telefone)return false;
     if(fu&&d.urgencia!==fu)return false;if(fs&&d.status!==fs)return false;if(fc&&d.categoria!==fc)return false;
     if(bu&&!`${d.autor} ${d.texto} ${d.aluno_nome||''} ${d.aluno_turma||''} ${d.origem}`.toLowerCase().includes(bu))return false;
     return true;
