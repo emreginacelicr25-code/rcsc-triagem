@@ -399,10 +399,11 @@ function renderD(){
     const pd=pD.includes(d.categoria);
         const eMaterial = d.categoria==='Solicitação de material/cópias';
         const docIcon=d.doc_gerado?'<span title="Documento já gerado" style="font-size:.8rem;color:var(--verde2)">📄✓</span>':''
+        const midia=midiaHTML(d);
     return`<div class="card ${d.urgencia} ${d.status}">
       <div class="ch"><div><div class="ca">${e(d.autor)}</div><div class="cw">${e(d.data_msg||d.criado_em?.slice(0,10)||'')} ${e(d.hora_msg||d.criado_em?.slice(11,16)||'')} · ${e(d.origem)}</div></div>
       <div class="chips"><span class="chip ${d.urgencia}">${d.urgencia==='alta'?'🔴 Alta':d.urgencia==='media'?'🟡 Média':'🟢 Baixa'}</span><span class="chip cat">${e(d.categoria)}</span><span class="chip ${d.status}">${d.status==='aberto'?'Aberto':d.status==='em_andamento'?'Em andamento':'✓ Concluído'}</span>${docIcon}</div></div>
-      ${al}<div class="ctxt" onclick="this.classList.toggle('exp')">${e(d.texto)}</div>
+      ${al}${midia}<div class="ctxt" onclick="this.classList.toggle('exp')">${e(d.texto)}</div>
       <div class="cact">
         <select class="sm" style="border:1px solid var(--line);border-radius:6px;background:#fff;font:inherit;cursor:pointer;padding:5px 8px" onchange="altSt('${d.id}',this.value)">
           <option value="aberto"${d.status==='aberto'?' selected':''}>Aberto</option>
@@ -416,6 +417,25 @@ function renderD(){
         <button class="bi sm" style="color:var(--vermelho)" onclick="delD('${d.id}')">🗑</button>
       </div></div>`;
   }).join('');
+}
+
+// Monta o bloco de exibição de mídia (áudio/imagem/vídeo/documento) de um card
+function midiaHTML(d){
+  if(!d.media_url||!d.media_tipo)return'';
+  const url=d.media_url;
+  if(d.media_tipo==='audio'){
+    return`<div style="margin:8px 0"><audio controls preload="none" style="width:100%;height:38px" src="${url}"></audio></div>`;
+  }
+  if(d.media_tipo==='image'||d.media_tipo==='sticker'){
+    return`<div style="margin:8px 0"><img src="${url}" alt="Imagem recebida" style="max-width:100%;max-height:260px;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;display:block" onclick="window.open('${url}','_blank')"></div>`;
+  }
+  if(d.media_tipo==='video'){
+    return`<div style="margin:8px 0"><video controls preload="metadata" style="max-width:100%;max-height:280px;border-radius:8px;border:1px solid var(--line);display:block" src="${url}"></video></div>`;
+  }
+  if(d.media_tipo==='document'){
+    return`<div style="margin:8px 0"><a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;text-decoration:none;color:#1e3a5f;font-size:.85rem;font-weight:600">📄 Abrir documento</a></div>`;
+  }
+  return'';
 }
 
 async function salvarD(){
