@@ -43,6 +43,10 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
 .chip.alta{background:#fee2e2;color:var(--vermelho)}.chip.media{background:#fef3c7;color:#92400e}.chip.baixa{background:var(--verde3);color:var(--verde)}
 .chip.cat{background:#e0e7ff;color:#3730a3}
 .chip.aberto{background:#fef3c7;color:#92400e}.chip.em_andamento{background:#dbeafe;color:#1e40af}.chip.concluido{background:#d1fae5;color:#065f46}
+.chip.etp-urgente{background:#7f1d1d;color:#fff;animation:pulseEtp 1.6s ease-in-out infinite}
+.chip.etp-atencao{background:#fef9c3;color:#854d0e;border:1px solid #eab308}
+@keyframes pulseEtp{0%,100%{opacity:1}50%{opacity:.72}}
+.card.etp-urgente{border-left-color:#7f1d1d!important;box-shadow:0 0 0 2px rgba(127,29,29,.15)}
 .ctxt{font-size:.88rem;color:#334;white-space:pre-wrap;word-break:break-word;margin-bottom:8px;max-height:80px;overflow:hidden;cursor:pointer}
 .ctxt.exp{max-height:none}
 .cact{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -135,6 +139,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       <div class="stat alta"><div class="num" id="sA">—</div><div class="lbl">Urgência alta</div></div>
       <div class="stat media"><div class="num" id="sM">—</div><div class="lbl">Atenção média</div></div>
       <div class="stat ok"><div class="num" id="sC">—</div><div class="lbl">Concluídos</div></div>
+      <div class="stat" style="border-color:#7f1d1d"><div class="num" id="sEtp" style="color:#7f1d1d">—</div><div class="lbl">Casos ETP</div></div>
     </div>
     <!-- Mini painel de cotas de impressão -->
     <div id="miniCotas" style="display:none;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 4px var(--shadow)">
@@ -150,6 +155,12 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       <select id="fUrg" onchange="renderD()"><option value="">Toda urgência</option><option value="alta">🔴 Alta</option><option value="media">🟡 Média</option><option value="baixa">🟢 Baixa</option></select>
       <select id="fSt" onchange="renderD()"><option value="">Todos os status</option><option value="aberto">Aberto</option><option value="em_andamento">Em andamento</option><option value="concluido">Concluído</option></select>
       <select id="fCat" onchange="renderD()"><option value="">Todas as categorias</option></select>
+      <select id="fEtp" onchange="renderD()">
+        <option value="">Todos os casos</option>
+        <option value="urgente">🚨 ETP Urgente</option>
+        <option value="atencao">⚠️ ETP Atenção</option>
+        <option value="any">🔶 Qualquer caso ETP</option>
+      </select>
       <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:#556;white-space:nowrap;cursor:pointer;user-select:none">
         <input type="checkbox" id="fOcultarImp" onchange="toggleImportadas()" style="cursor:pointer">
         Ocultar importadas
@@ -378,20 +389,24 @@ function stats(){
   g('sA').textContent=DD.filter(d=>d.urgencia==='alta'&&d.status!=='concluido').length;
   g('sM').textContent=DD.filter(d=>d.urgencia==='media'&&d.status!=='concluido').length;
   g('sC').textContent=DD.filter(d=>d.status==='concluido').length;
+  g('sEtp').textContent=DD.filter(d=>d.etp_nivel&&d.status!=='concluido').length;
 }
 function catFiltro(){const s=g('fCat'),cur=s.value,cats=[...new Set(DD.map(d=>d.categoria))].sort();s.innerHTML='<option value="">Todas as categorias</option>';cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;s.appendChild(o);});s.value=cur;}
 
 function renderD(){
-  const bu=g('busca').value.toLowerCase(),fu=g('fUrg').value,fs=g('fSt').value,fc=g('fCat').value;
+  const bu=g('busca').value.toLowerCase(),fu=g('fUrg').value,fs=g('fSt').value,fc=g('fCat').value,fe=g('fEtp')?g('fEtp').value:'';
   const ocultarImp=g('fOcultarImp')?g('fOcultarImp').checked:false;
   let L=DD.filter(d=>{
     if(ocultarImp&&!d.telefone)return false;
     if(fu&&d.urgencia!==fu)return false;if(fs&&d.status!==fs)return false;if(fc&&d.categoria!==fc)return false;
+    if(fe==='any'&&!d.etp_nivel)return false;
+    if((fe==='urgente'||fe==='atencao')&&d.etp_nivel!==fe)return false;
     if(bu&&!`${d.autor} ${d.texto} ${d.aluno_nome||''} ${d.aluno_turma||''} ${d.origem}`.toLowerCase().includes(bu))return false;
     return true;
   });
-  const pu={alta:0,media:1,baixa:2},ps={aberto:0,em_andamento:1,concluido:2};
-  L.sort((a,b)=>(pu[a.urgencia]-pu[b.urgencia])||(ps[a.status]-ps[b.status]));
+  const pu={alta:0,media:1,baixa:2},ps={aberto:0,em_andamento:1,concluido:2},pe={urgente:0,atencao:1};
+  const etpKey=d=>d.etp_nivel&&d.etp_nivel in pe?pe[d.etp_nivel]:2;
+  L.sort((a,b)=>(etpKey(a)-etpKey(b))||(pu[a.urgencia]-pu[b.urgencia])||(ps[a.status]-ps[b.status]));
   const cont=g('listaD');
   if(!L.length){cont.innerHTML='<div class="empty">📭 Nenhuma demanda encontrada.</div>';return;}
   const pD=['Registro pedagógico','Reclamação/Queixa','Agendamento','Solicitação de material/cópias','Aula passeio'];
@@ -401,9 +416,12 @@ function renderD(){
         const eMaterial = d.categoria==='Solicitação de material/cópias';
         const docIcon=d.doc_gerado?'<span title="Documento já gerado" style="font-size:.8rem;color:var(--verde2)">📄✓</span>':''
         const midia=midiaHTML(d);
-    return`<div class="card ${d.urgencia} ${d.status}">
+    const etpNomes={liliam:'Liliam',elaine:'Elaine',jose_jorge:'José Jorge',etp_completa:'ETP completa'};
+    const etpChip=d.etp_nivel?`<span class="chip etp-${d.etp_nivel}">${d.etp_nivel==='urgente'?'🚨':'⚠️'} ${etpNomes[d.etp_destinatario]||'ETP'}</span>`:'';
+    const cardEtpClass=d.etp_nivel==='urgente'?'etp-urgente':'';
+    return`<div class="card ${d.urgencia} ${d.status} ${cardEtpClass}">
       <div class="ch"><div><div class="ca">${e(d.autor)}</div><div class="cw">${e(d.data_msg||d.criado_em?.slice(0,10)||'')} ${e(d.hora_msg||d.criado_em?.slice(11,16)||'')} · ${e(d.origem)}</div></div>
-      <div class="chips"><span class="chip ${d.urgencia}">${d.urgencia==='alta'?'🔴 Alta':d.urgencia==='media'?'🟡 Média':'🟢 Baixa'}</span><span class="chip cat">${e(d.categoria)}</span><span class="chip ${d.status}">${d.status==='aberto'?'Aberto':d.status==='em_andamento'?'Em andamento':'✓ Concluído'}</span>${docIcon}</div></div>
+      <div class="chips">${etpChip}<span class="chip ${d.urgencia}">${d.urgencia==='alta'?'🔴 Alta':d.urgencia==='media'?'🟡 Média':'🟢 Baixa'}</span><span class="chip cat">${e(d.categoria)}</span><span class="chip ${d.status}">${d.status==='aberto'?'Aberto':d.status==='em_andamento'?'Em andamento':'✓ Concluído'}</span>${docIcon}</div></div>
       ${al}${midia}<div class="ctxt" onclick="this.classList.toggle('exp')">${e(d.texto)}</div>
       <div class="cact">
         <select class="sm" style="border:1px solid var(--line);border-radius:6px;background:#fff;font:inherit;cursor:pointer;padding:5px 8px" onchange="altSt('${d.id}',this.value)">
