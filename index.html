@@ -128,6 +128,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
     <button class="tab" data-v="registrar" onclick="aba(this)">✏️ Registrar</button>
     <button class="tab" data-v="alunos" onclick="aba(this)">👨‍🎓 Alunos</button>
     <button class="tab" data-v="professores" onclick="aba(this)">👨‍🏫 Professores</button>
+    <button class="tab" data-v="etp" onclick="aba(this)">🛟 ETP</button>
     <button class="tab" data-v="importar" onclick="aba(this)">📲 Importar WhatsApp</button>
     <button class="tab" data-v="automaticas" onclick="aba(this)">📢 Mensagens automáticas</button>
   </div>
@@ -242,6 +243,31 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
     </div>
     <div class="toolbar"><input type="text" id="pBusca" placeholder="Buscar professor(a)..." oninput="renderP()"></div>
     <div id="listaP"><div class="loading">Carregando...</div></div>
+  </section>
+
+  <!-- ETP -->
+  <section class="view" id="view-etp">
+    <div class="fcard">
+      <h3>🛟 Equipe Técnico-Pedagógica (ETP)</h3>
+      <p style="font-size:.85rem;color:#556;margin-top:-8px">
+        Contatos que recebem os alertas automáticos de encaminhamento à ETP. O <b>identificador</b> não deve ser alterado
+        para Liliam, Elaine e José Jorge, pois é usado para direcionar categorias específicas (ex: pedagógico → Liliam).
+        Novos contatos entram automaticamente nos alertas de nível "ETP completa".
+      </p>
+      <input type="hidden" id="etpEditId">
+      <div class="fg">
+        <div class="f"><label>Nome completo</label><input type="text" id="etpNm" placeholder="Nome"></div>
+        <div class="f"><label>Cargo/função</label><input type="text" id="etpCg" placeholder="Ex: Coordenadora Pedagógica"></div>
+        <div class="f"><label>WhatsApp</label><input type="text" id="etpTf" placeholder="Ex: 5521999999999 (com DDI e DDD)"></div>
+        <div class="f"><label>E-mail</label><input type="email" id="etpEm" placeholder="email@exemplo.com"></div>
+        <div class="f"><label>Identificador (chave)</label><input type="text" id="etpCh" placeholder="Ex: liliam, elaine, novo_membro"></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:10px">
+        <button class="bp" onclick="salvarEtp()" id="btnSalvarEtp">💾 Cadastrar contato ETP</button>
+        <button class="bs" onclick="limparEtpForm()">✕ Cancelar edição</button>
+      </div>
+    </div>
+    <div id="listaEtp"><div class="loading">Carregando...</div></div>
   </section>
 
   <!-- MENSAGENS AUTOMÁTICAS -->
@@ -616,6 +642,81 @@ function renderP(){
 }
 async function toggleP(id,ativo){
   try{await db('professores_contatos','PATCH',{ativo:!ativo,atualizado_em:new Date().toISOString()},`?id=eq.${id}`);const p=PP.find(x=>x.id===id);if(p)p.ativo=!ativo;renderP();toast(ativo?'Professor(a) desativado(a).':'Professor(a) ativado(a).');}catch(ex){toast('Erro: '+ex.message);}
+}
+
+/* ETP */
+let ETP=[];
+async function loadEtp(){try{ETP=await db('etp_contatos','GET',null,'?order=nome.asc');renderEtp();}catch(e){g('listaEtp').innerHTML='<div class="empty">Erro: '+e.message+'</div>';}}
+
+async function salvarEtp(){
+  const id=g('etpEditId').value;
+  const c={
+    nome:g('etpNm').value.trim(),
+    cargo:g('etpCg').value.trim()||null,
+    whatsapp:g('etpTf').value.trim()||null,
+    email:g('etpEm').value.trim()||null,
+    chave:g('etpCh').value.trim().toLowerCase().replace(/\s+/g,'_'),
+  };
+  if(!c.nome){toast('Informe o nome.');return;}
+  if(!c.chave){toast('Informe um identificador (chave).');return;}
+  try{
+    if(id){
+      await db('etp_contatos','PATCH',{...c,atualizado_em:new Date().toISOString()},`?id=eq.${id}`);
+      toast('✅ Contato ETP atualizado!');
+    } else {
+      c.ativo=true;
+      await db('etp_contatos','POST',c);
+      toast('✅ Contato ETP cadastrado!');
+    }
+    limparEtpForm();
+    await loadEtp();
+  }catch(ex){
+    toast('Erro: '+(ex.message.includes('duplicate')?'Já existe um contato com essa chave.':ex.message));
+  }
+}
+
+function editarEtp(id){
+  const c=ETP.find(x=>x.id===id);
+  if(!c)return;
+  g('etpEditId').value=c.id;
+  g('etpNm').value=c.nome||'';
+  g('etpCg').value=c.cargo||'';
+  g('etpTf').value=c.whatsapp||'';
+  g('etpEm').value=c.email||'';
+  g('etpCh').value=c.chave||'';
+  g('btnSalvarEtp').textContent='💾 Salvar alterações';
+  aba(document.querySelector('.tab[data-v="etp"]'));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function limparEtpForm(){
+  g('etpEditId').value='';
+  ['etpNm','etpCg','etpTf','etpEm','etpCh'].forEach(id=>g(id).value='');
+  g('btnSalvarEtp').textContent='💾 Cadastrar contato ETP';
+}
+
+function renderEtp(){
+  const cont=g('listaEtp');
+  if(!ETP.length){cont.innerHTML='<div class="empty">🛟 Nenhum contato ETP cadastrado.</div>';return;}
+  cont.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">`+
+    ETP.map(c=>`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:12px;box-shadow:0 1px 4px var(--shadow);opacity:${c.ativo?1:.55}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+        <div style="font-weight:700">${e(c.nome)}</div>
+        <span class="chip ${c.ativo?'baixa':'aberto'}" style="flex-shrink:0">${c.ativo?'Ativo':'Inativo'}</span>
+      </div>
+      ${c.cargo?`<div style="font-size:.8rem;color:#778;margin-top:2px">${e(c.cargo)}</div>`:''}
+      ${c.whatsapp?`<div style="font-size:.8rem;color:#778;margin-top:2px">📱 ${e(c.whatsapp)}</div>`:''}
+      ${c.email?`<div style="font-size:.8rem;color:#778;margin-top:2px">✉️ ${e(c.email)}</div>`:''}
+      <div style="font-size:.72rem;color:#99a;margin-top:4px">chave: ${e(c.chave)}</div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="sm bs" onclick="editarEtp('${c.id}')">✏️ Editar</button>
+        <button class="sm ${c.ativo?'bs':'bp'}" onclick="toggleEtp('${c.id}',${c.ativo})">${c.ativo?'Desativar':'Ativar'}</button>
+      </div>
+    </div>`).join('')+'</div>';
+}
+
+async function toggleEtp(id,ativo){
+  try{await db('etp_contatos','PATCH',{ativo:!ativo,atualizado_em:new Date().toISOString()},`?id=eq.${id}`);const c=ETP.find(x=>x.id===id);if(c)c.ativo=!ativo;renderEtp();toast(ativo?'Contato desativado.':'Contato ativado.');}catch(ex){toast('Erro: '+ex.message);}
 }
 
 /* DOCUMENTOS */
@@ -1632,7 +1733,7 @@ async function enviarResposta(){
 
 (async()=>{
   const now=new Date();g('fD').value=now.toISOString().slice(0,10);g('fH').value=now.toTimeString().slice(0,5);
-  await loadD();await loadA();await loadP();renderTemplates();carregarMiniCotas();
+  await loadD();await loadA();await loadP();await loadEtp();renderTemplates();carregarMiniCotas();
 })();
 </script>
 
