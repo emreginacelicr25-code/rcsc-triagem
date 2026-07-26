@@ -182,6 +182,9 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
 
   <!-- SOLICITAR -->
   <section class="view" id="view-solicitar">
+    <div id="bannerPrefill" style="display:none;background:#eaf6ec;border:1px solid #2e8b46;color:#1e6b32;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:.88rem;font-weight:600">
+      📎 Este link veio de um arquivo enviado pelo WhatsApp. Confira os dados abaixo e complete a solicitação.
+    </div>
     <div class="fcard">
       <h3>📤 Nova solicitação de impressão</h3>
       <div class="fg">
@@ -400,6 +403,8 @@ for(const [turno, segs] of Object.entries(ESTRUTURA)){
 ================================================================ */
 let IMPRESSOES = [];
 let ARQUIVO_SELECIONADO = null;
+let PREFILL_ARQUIVO = null; // {url, nome, tipo} quando vem de um link ?doc=
+let DOC_ID = null; // id da demanda de origem (para marcar impressao_confirmada depois)
 
 /* ================================================================
    CARREGAR
@@ -648,26 +653,37 @@ async function enviarSolicitacao(){
   if(!g('sPrf').value){toast('Selecione o professor(a).');return;}
   const turmaSel = g('sTrm').value;
   if(!turmaSel){toast('Selecione a turma.');return;}
-  if(!ARQUIVO_SELECIONADO){toast('Selecione um arquivo.');return;}
+  if(!ARQUIVO_SELECIONADO && !PREFILL_ARQUIVO){toast('Selecione um arquivo.');return;}
 
   const td = JSON.parse(turmaSel);
   const btn = document.querySelector('[onclick="enviarSolicitacao()"]');
   btn.textContent='Enviando...';btn.disabled=true;
 
   try{
-    // Tentar upload do arquivo
-    const url = await uploadArquivo(ARQUIVO_SELECIONADO);
-    const ext = ARQUIVO_SELECIONADO.name.split('.').pop().toLowerCase();
+    let url, nomeArq, extArq, tamanhoArq;
+    if(ARQUIVO_SELECIONADO){
+      // Arquivo escolhido manualmente nesta tela (substitui o recebido via WhatsApp, se houver)
+      url = await uploadArquivo(ARQUIVO_SELECIONADO);
+      nomeArq = ARQUIVO_SELECIONADO.name;
+      extArq = ARQUIVO_SELECIONADO.name.split('.').pop().toLowerCase();
+      tamanhoArq = (ARQUIVO_SELECIONADO.size/1024/1024).toFixed(2)+'MB';
+    } else {
+      // Arquivo já recebido via WhatsApp (pré-preenchido pelo link)
+      url = PREFILL_ARQUIVO.url;
+      nomeArq = PREFILL_ARQUIVO.nome;
+      extArq = PREFILL_ARQUIVO.tipo;
+      tamanhoArq = 'Via WhatsApp';
+    }
 
     const sol = {
       professor: g('sPrf').value,
       turma: td.turma,
       turno: td.turno,
       segmento: td.segmento,
-      arquivo_nome: ARQUIVO_SELECIONADO.name,
+      arquivo_nome: nomeArq,
       arquivo_url: url,
-      arquivo_tipo: ext,
-      arquivo_tamanho: (ARQUIVO_SELECIONADO.size/1024/1024).toFixed(2)+'MB',
+      arquivo_tipo: extArq,
+      arquivo_tamanho: tamanhoArq,
       quantidade_copias: parseInt(g('sQtd').value)||1,
       frente_verso: g('sFV').checked,
       colorido: g('sCor').checked,
@@ -676,6 +692,13 @@ async function enviarSolicitacao(){
     };
 
     await db('impressoes','POST',sol);
+
+    // Se veio de um link do WhatsApp, marca a demanda de origem como confirmada
+    if(DOC_ID){
+      try{ await db('demandas','PATCH',{impressao_confirmada:true},`?id=eq.${DOC_ID}`); }
+      catch(_){ /* não bloqueia o fluxo principal */ }
+    }
+
     toast('✅ Solicitação enviada para a fila!');
     limparForm();
     await loadImpressoes();
@@ -690,6 +713,8 @@ function limparForm(){
   g('sPrf').value='';g('sTrm').innerHTML='<option value="">Selecione a turma…</option>';
   g('sQtd').value='1';g('sObs').value='';
   g('sFV').checked=false;g('sCor').checked=false;
+  PREFILL_ARQUIVO=null;DOC_ID=null;
+  g('bannerPrefill').style.display='none';
   removerArquivo();
 }
 
@@ -870,9 +895,70 @@ function renderCotas(){
 }
 
 
+// Extensão a partir do mime type (mesma lógica do webhook)
+function extensaoDeMime(mime){
+  const mapa = {
+    'application/pdf':'pdf',
+    'application/msword':'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx',
+    'image/jpeg':'jpg','image/png':'png','image/webp':'webp',
+  };
+  return mapa[mime] || 'pdf';
+}
+
+async function verificarPreenchimentoDoc(){
+  const docId = new URLSearchParams(location.search).get('doc');
+  if(!docId) return;
+
+  try{
+    const rows = await db('demandas','GET',null,`?id=eq.${docId}&select=id,autor,telefone,media_url,media_mime`);
+    const d = rows && rows[0];
+    if(!d || !d.media_url){
+      toast('Link inválido ou arquivo não encontrado.');
+      return;
+    }
+
+    DOC_ID = d.id;
+    const ext = extensaoDeMime(d.media_mime);
+    PREFILL_ARQUIVO = { url: d.media_url, nome: `documento_whatsapp.${ext}`, tipo: ext };
+
+    // Vai direto para a aba de solicitação
+    aba(document.querySelector('.tab[data-v="solicitar"]'));
+    g('bannerPrefill').style.display = 'block';
+
+    // Mostra o arquivo já recebido no preview (sem precisar reenviar)
+    const icos = {pdf:'📄',docx:'📝',doc:'📝',jpg:'🖼️',jpeg:'🖼️',png:'🖼️',webp:'🖼️'};
+    g('arquivoPreview').style.display = 'flex';
+    g('arquivoPreview').innerHTML = `<div class="fi">${icos[ext]||'📎'}</div><div><div class="fn">${e(PREFILL_ARQUIVO.nome)}</div><div class="fs">Recebido via WhatsApp</div></div>`;
+
+    // Tenta identificar o professor pelo telefone e pré-selecionar
+    if(d.telefone){
+      const profs = await db('professores_contatos','GET',null,`?telefone=eq.${d.telefone}&ativo=eq.true&limit=1`);
+      const prof = profs && profs[0];
+      if(prof && [...PROFESSORES].includes(prof.professor)){
+        g('sPrf').value = prof.professor;
+        filtrarTurmas();
+        if(prof.turma){
+          [...g('sTrm').options].forEach(o=>{
+            if(!o.value) return;
+            try{
+              const td = JSON.parse(o.value);
+              if(String(td.turma).trim() === String(prof.turma).trim()) g('sTrm').value = o.value;
+            }catch(_){}
+          });
+        }
+      }
+    }
+  }catch(ex){
+    console.error('Erro ao pré-preencher formulário:', ex);
+    toast('Não foi possível carregar os dados do link.');
+  }
+}
+
 (async()=>{
   popularProfessores();
   await loadImpressoes();
+  await verificarPreenchimentoDoc();
 })();
 </script>
 
