@@ -1510,16 +1510,70 @@ function fecharResposta(){ g('rBg').classList.remove('open'); respostaAtual = nu
 
 async function enviarRespostaAudio(){
   const texto = g('rTexto').value.trim();
-  if(!texto){ toast('Escreva ou escolha uma mensagem — ela será convertida em áudio.'); return; }
+  if(!texto){ toast('Escreva ou escolha uma mensagem — ela será narrada e gravada.'); return; }
   if(!respostaAtual) return;
+
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia || !window.MediaRecorder || !window.speechSynthesis){
+    toast('⚠️ Recurso de áudio disponível apenas em computador (Chrome/Edge). Tente de um computador.');
+    return;
+  }
+
   const btn = g('rBtnAudio');
   const btnTexto = g('rBtnEnviar');
-  btn.disabled = true; btnTexto.disabled = true; btn.textContent = 'Gerando áudio...';
+
+  const prosseguir = confirm('Na próxima tela, selecione "Esta guia" e marque a opção "Compartilhar áudio da guia" antes de clicar em Compartilhar. Continuar?');
+  if(!prosseguir) return;
+
+  btn.disabled = true; btnTexto.disabled = true; btn.textContent = 'Aguardando permissão...';
+
+  let stream, audioStream, recorder;
   try{
-    const r = await fetch(`${SU}/functions/v1/enviar-audio`,{
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    const audioTracks = stream.getAudioTracks();
+    if(!audioTracks.length){
+      stream.getTracks().forEach(t=>t.stop());
+      throw new Error('Nenhum áudio compartilhado — marque "Compartilhar áudio da guia" e tente de novo.');
+    }
+    stream.getVideoTracks().forEach(t=>t.stop()); // não precisamos do vídeo, só do áudio
+    audioStream = new MediaStream(audioTracks);
+
+    const chunks = [];
+    recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm;codecs=opus' });
+    recorder.ondataavailable = e => { if(e.data.size>0) chunks.push(e.data); };
+
+    const gravacaoPronta = new Promise((resolve, reject)=>{
+      recorder.onstop = ()=> resolve(new Blob(chunks, { type:'audio/webm' }));
+      recorder.onerror = reject;
+    });
+
+    btn.textContent = 'Gravando...';
+    recorder.start();
+
+    await new Promise((resolve)=>{
+      const utter = new SpeechSynthesisUtterance(texto);
+      utter.lang = 'pt-BR';
+      utter.onend = resolve;
+      utter.onerror = resolve;
+      speechSynthesis.speak(utter);
+    });
+
+    await new Promise(r=>setTimeout(r, 500)); // pequena folga para capturar o fim da fala
+    recorder.stop();
+    audioStream.getTracks().forEach(t=>t.stop());
+
+    const blob = await gravacaoPronta;
+    const audioBase64 = await new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onloadend = ()=> resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    btn.textContent = 'Enviando...';
+    const r = await fetch(`${SU}/functions/v1/enviar-audio-navegador`,{
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'x-access-key': TRIAGEM_ACCESS_KEY },
-      body: JSON.stringify({ telefone: respostaAtual.telefone, texto, demanda_id: respostaAtual.id })
+      body: JSON.stringify({ telefone: respostaAtual.telefone, texto, demanda_id: respostaAtual.id, audio_base64: audioBase64, mime: 'audio/webm' })
     });
     const j = await r.json();
     if(!r.ok || j.erro) throw new Error(j.erro || 'Erro ao enviar áudio');
@@ -1528,6 +1582,7 @@ async function enviarRespostaAudio(){
     if(document.getElementById('mBg')?.classList.contains('open')) abrirD(respostaAtual.id);
   }catch(ex){
     toast('Erro: '+ex.message);
+    if(stream) stream.getTracks().forEach(t=>t.stop());
   }finally{
     btn.disabled = false; btnTexto.disabled = false; btn.textContent = '🎤 Enviar por áudio';
   }
