@@ -129,6 +129,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
     <button class="tab" data-v="alunos" onclick="aba(this)">👨‍🎓 Alunos</button>
     <button class="tab" data-v="professores" onclick="aba(this)">👨‍🏫 Professores</button>
     <button class="tab" data-v="etp" onclick="aba(this)">🛟 ETP</button>
+    <button class="tab" data-v="audios" onclick="aba(this)">🎤 Áudios pendentes</button>
     <button class="tab" data-v="importar" onclick="aba(this)">📲 Importar WhatsApp</button>
     <button class="tab" data-v="automaticas" onclick="aba(this)">📢 Mensagens automáticas</button>
   </div>
@@ -141,6 +142,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       <div class="stat media"><div class="num" id="sM">—</div><div class="lbl">Atenção média</div></div>
       <div class="stat ok"><div class="num" id="sC">—</div><div class="lbl">Concluídos</div></div>
       <div class="stat" style="border-color:#7f1d1d"><div class="num" id="sEtp" style="color:#7f1d1d">—</div><div class="lbl">Casos ETP</div></div>
+      <div class="stat" style="border-color:#1e40af"><div class="num" id="sAudio" style="color:#1e40af">—</div><div class="lbl">Áudios pendentes</div></div>
     </div>
     <!-- Mini painel de cotas de impressão -->
     <div id="miniCotas" style="display:none;background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;box-shadow:0 1px 4px var(--shadow)">
@@ -268,6 +270,18 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       </div>
     </div>
     <div id="listaEtp"><div class="loading">Carregando...</div></div>
+  </section>
+
+  <!-- ÁUDIOS PENDENTES -->
+  <section class="view" id="view-audios">
+    <div class="fcard" style="margin-bottom:16px">
+      <h3>🎤 Áudios pendentes de resposta</h3>
+      <p style="font-size:.85rem;color:#556;margin-top:-8px">
+        Mensagens de áudio recebidas via WhatsApp que ainda não tiveram resposta da escola — úteis para priorizar
+        famílias que preferem se comunicar por voz.
+      </p>
+    </div>
+    <div id="listaAudios"><div class="loading">Carregando...</div></div>
   </section>
 
   <!-- MENSAGENS AUTOMÁTICAS -->
@@ -401,9 +415,10 @@ function autoClass(){const tx=g('fTx').value;if(!tx.trim()){toast('Digite o text
 async function loadD(){
   try{g('listaD').innerHTML='<div class="loading">Carregando...</div>';
     DD=await db('demandas','GET',null,'?order=criado_em.desc&limit=300');
+    await loadRespondidos();
     const chkImp=g('fOcultarImp');
     if(chkImp){const salvo=localStorage.getItem('ocultarImportadas');chkImp.checked=(salvo===null?true:salvo==='1');}
-    stats();renderD();catFiltro();
+    stats();renderD();renderAudios();catFiltro();
     g('stConn').textContent='● Online';g('stConn').style.cssText='background:#4ade80;color:#14532d';
   }catch(e){g('listaD').innerHTML=`<div class="empty">⚠️ Erro: ${e.message}</div>`;g('stConn').textContent='● Offline';}
 }
@@ -436,8 +451,12 @@ function renderD(){
   const cont=g('listaD');
   if(!L.length){cont.innerHTML='<div class="empty">📭 Nenhuma demanda encontrada.</div>';return;}
   const pD=['Registro pedagógico','Reclamação/Queixa','Agendamento','Solicitação de material/cópias','Aula passeio'];
-  cont.innerHTML=L.map(d=>{
+  cont.innerHTML=L.map(cardHTML).join('');
+}
+
+function cardHTML(d){
     const al=d.aluno_nome?`<div style="font-size:.8rem;color:var(--verde2);font-weight:600;margin-bottom:5px">👨‍🎓 ${e(d.aluno_nome)}${d.aluno_turma?' · '+e(d.aluno_turma):''}</div>`:'';
+    const pD=['Registro pedagógico','Reclamação/Queixa','Agendamento','Solicitação de material/cópias','Aula passeio'];
     const pd=pD.includes(d.categoria);
         const eMaterial = d.categoria==='Solicitação de material/cópias';
         const docIcon=d.doc_gerado?'<span title="Documento já gerado" style="font-size:.8rem;color:var(--verde2)">📄✓</span>':''
@@ -461,7 +480,6 @@ function renderD(){
         ${eMaterial?`<button class="bs sm" style="color:#1e40af;border-color:#93c5fd" onclick="abrirEnvioImpressao('${d.id}')">🖨️ Enviar p/ impressão</button>`:''}
         <button class="bi sm" style="color:var(--vermelho)" onclick="delD('${d.id}')">🗑</button>
       </div></div>`;
-  }).join('');
 }
 
 // Monta o bloco de exibição de mídia (áudio/imagem/vídeo/documento) de um card
@@ -717,6 +735,24 @@ function renderEtp(){
 
 async function toggleEtp(id,ativo){
   try{await db('etp_contatos','PATCH',{ativo:!ativo,atualizado_em:new Date().toISOString()},`?id=eq.${id}`);const c=ETP.find(x=>x.id===id);if(c)c.ativo=!ativo;renderEtp();toast(ativo?'Contato desativado.':'Contato ativado.');}catch(ex){toast('Erro: '+ex.message);}
+}
+
+/* ÁUDIOS PENDENTES */
+let RESPONDIDOS=new Set();
+async function loadRespondidos(){
+  try{
+    const hist=await db('historico_demandas','GET',null,`?acao=eq.resposta_whatsapp&select=demanda_id`);
+    RESPONDIDOS=new Set((hist||[]).map(h=>h.demanda_id));
+  }catch(e){console.error('Erro ao carregar histórico de respostas:',e);}
+}
+
+function renderAudios(){
+  const cont=g('listaAudios');
+  const pendentes=DD.filter(d=>d.media_tipo==='audio'&&!RESPONDIDOS.has(d.id));
+  pendentes.sort((a,b)=>new Date(b.criado_em||0)-new Date(a.criado_em||0));
+  g('sAudio').textContent=pendentes.length;
+  if(!pendentes.length){cont.innerHTML='<div class="empty">🎤 Nenhum áudio pendente de resposta.</div>';return;}
+  cont.innerHTML=pendentes.map(cardHTML).join('');
 }
 
 /* DOCUMENTOS */
@@ -1697,6 +1733,7 @@ async function enviarRespostaAudio(){
     const j = await r.json();
     if(!r.ok || j.erro) throw new Error(j.erro || 'Erro ao enviar áudio');
     toast('✅ Áudio enviado!');
+    RESPONDIDOS.add(respostaAtual.id); renderAudios();
     fecharResposta();
     if(document.getElementById('mBg')?.classList.contains('open')) abrirD(respostaAtual.id);
   }catch(ex){
@@ -1722,6 +1759,7 @@ async function enviarResposta(){
     const j = await r.json();
     if(!r.ok || j.erro) throw new Error(j.erro || 'Erro ao enviar');
     toast('✅ Mensagem enviada!');
+    RESPONDIDOS.add(respostaAtual.id); renderAudios();
     fecharResposta();
     if(document.getElementById('mBg')?.classList.contains('open')) abrirD(respostaAtual.id);
   }catch(ex){
