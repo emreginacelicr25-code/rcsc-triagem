@@ -376,9 +376,12 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
     <div class="mb">
       <div class="usel" id="rSugestoes" style="margin-bottom:12px"></div>
       <textarea id="rTexto" style="width:100%;min-height:140px;padding:12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;font-size:.92rem"></textarea>
+      <input type="file" id="rArquivo" accept="image/png,image/jpeg,image/webp,application/pdf" style="display:none" onchange="arquivoSelecionado()">
+      <div id="rArquivoPreview" style="margin-top:8px;font-size:.82rem;color:#556;display:none"></div>
     </div>
     <div class="mf">
       <button class="bs sm" onclick="fecharResposta()">Cancelar</button>
+      <button class="bs sm" id="rBtnAnexo" style="color:#0369a1;border-color:#7dd3fc" onclick="document.getElementById('rArquivo').click()">📎 Anexar imagem/PDF</button>
       <button class="bs sm" id="rBtnAudio" style="color:#7c3aed;border-color:#c4b5fd" onclick="enviarRespostaAudio()">🎤 Enviar por áudio</button>
       <button class="bp sm" id="rBtnEnviar" onclick="enviarResposta()">📤 Enviar</button>
     </div>
@@ -558,7 +561,7 @@ function abrirD(id){
   db('historico_demandas','GET',null,`?demanda_id=eq.${id}&order=criado_em.asc`).then(hist=>{
     const cEl = document.getElementById(`conv-${id}`);
     const hEl = document.getElementById(`hist-${id}`);
-    const respostas = (hist||[]).filter(h=>h.acao==='resposta_whatsapp'||h.acao==='resposta_whatsapp_audio');
+    const respostas = (hist||[]).filter(h=>h.acao==='resposta_whatsapp'||h.acao==='resposta_whatsapp_audio'||h.acao==='resposta_whatsapp_arquivo');
 
     if(cEl){
       const bolhaResp=(t,quando)=>`<div style="align-self:flex-start;max-width:85%;background:#fff;border:1px solid var(--line);border-radius:10px 10px 10px 2px;padding:8px 12px">
@@ -567,10 +570,19 @@ function abrirD(id){
       </div>`;
       const bolhaEscola=(h)=>{
         const quando=new Date(h.criado_em).toLocaleString('pt-BR');
-        const player=(h.acao==='resposta_whatsapp_audio'&&h.media_url)?`<audio controls preload="none" style="width:100%;height:34px;margin-bottom:4px" src="${h.media_url}"></audio>`:'';
+        let player='';
+        if(h.acao==='resposta_whatsapp_audio'&&h.media_url){
+          player=`<audio controls preload="none" style="width:100%;height:34px;margin-bottom:4px" src="${h.media_url}"></audio>`;
+        }else if(h.acao==='resposta_whatsapp_arquivo'&&h.media_url){
+          const ehImg=/\.(png|jpe?g|webp)$/i.test(h.media_url);
+          player=ehImg
+            ? `<img src="${h.media_url}" style="max-width:100%;border-radius:6px;margin-bottom:4px;display:block">`
+            : `<a href="${h.media_url}" target="_blank" style="display:block;margin-bottom:4px;color:#0369a1;font-weight:700">📄 Ver documento</a>`;
+        }
+        const rotulo=h.acao==='resposta_whatsapp_audio'?' 🎤':(h.acao==='resposta_whatsapp_arquivo'?' 📎':'');
         return`<div style="align-self:flex-end;max-width:85%;background:#dcf8c6;border-radius:10px 10px 2px 10px;padding:8px 12px">
         ${player}<div style="font-size:.85rem;white-space:pre-wrap">${e(h.detalhe||'')}</div>
-        <div style="font-size:.68rem;color:#5a7;margin-top:3px;text-align:right">Escola${h.acao==='resposta_whatsapp_audio'?' 🎤':''} · ${quando}</div>
+        <div style="font-size:.68rem;color:#5a7;margin-top:3px;text-align:right">Escola${rotulo} · ${quando}</div>
       </div>`;};
       const midiaConv=midiaHTML(d);
       const quandoOriginal=(d.data_msg||d.criado_em?.slice(0,10)||'')+' '+(d.hora_msg||d.criado_em?.slice(11,16)||'');
@@ -584,7 +596,7 @@ function abrirD(id){
     if(!hEl) return;
     const histOrdenado=[...(hist||[])].reverse();
     if(!histOrdenado.length){hEl.innerHTML='<div style="color:#778;font-size:.82rem;font-style:italic">Nenhum histórico ainda.</div>';return;}
-    const rotuloAcao=a=>a==='resposta_whatsapp'?'Resposta enviada via WhatsApp':a==='resposta_whatsapp_audio'?'Resposta em áudio enviada via WhatsApp':a;
+    const rotuloAcao=a=>a==='resposta_whatsapp'?'Resposta enviada via WhatsApp':a==='resposta_whatsapp_audio'?'Resposta em áudio enviada via WhatsApp':a==='resposta_whatsapp_arquivo'?'Arquivo enviado via WhatsApp':a;
     hEl.innerHTML = histOrdenado.map(h=>`
       <div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:.82rem">
         <div style="font-weight:700;color:var(--verde2)">${rotuloAcao(h.acao)}</div>
@@ -1659,9 +1671,79 @@ function abrirResposta(id){
     `<button type="button" class="ubtn" onclick="g('rTexto').value=${JSON.stringify(s)}">Sugestão ${i+1}</button>`
   ).join('');
   g('rTexto').value = '';
+  g('rArquivo').value = '';
+  g('rArquivoPreview').style.display = 'none';
+  g('rArquivoPreview').innerHTML = '';
   g('rBg').classList.add('open');
 }
-function fecharResposta(){ g('rBg').classList.remove('open'); respostaAtual = null; }
+function fecharResposta(){ g('rBg').classList.remove('open'); respostaAtual = null; g('rArquivo').value=''; g('rArquivoPreview').style.display='none'; }
+
+const TIPOS_ARQUIVO_OK = ['image/png','image/jpeg','image/webp','application/pdf'];
+const TAMANHO_MAX_ARQUIVO = 15*1024*1024; // 15MB, limite prático da Meta para documentos
+
+function arquivoSelecionado(){
+  const input = g('rArquivo');
+  const f = input.files && input.files[0];
+  const prev = g('rArquivoPreview');
+  if(!f){ prev.style.display='none'; prev.innerHTML=''; return; }
+  if(!TIPOS_ARQUIVO_OK.includes(f.type)){
+    toast('Formato não suportado. Envie imagem (JPG/PNG/WEBP) ou PDF.');
+    input.value=''; prev.style.display='none'; return;
+  }
+  if(f.size > TAMANHO_MAX_ARQUIVO){
+    toast('Arquivo muito grande (máx. 15MB).');
+    input.value=''; prev.style.display='none'; return;
+  }
+  const tamanhoKB = (f.size/1024).toFixed(0);
+  prev.style.display='block';
+  prev.innerHTML = `📎 <b>${e(f.name)}</b> (${tamanhoKB} KB) — `
+    + `<a href="#" onclick="enviarRespostaArquivo();return false;" style="color:#0369a1;font-weight:700">enviar arquivo</a>`
+    + ` &nbsp;·&nbsp; <a href="#" onclick="g('rArquivo').value='';g('rArquivoPreview').style.display='none';return false;" style="color:#c0392b">remover</a>`;
+}
+
+function lerArquivoBase64(file){
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onloadend = ()=> resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function enviarRespostaArquivo(){
+  const input = g('rArquivo');
+  const f = input.files && input.files[0];
+  if(!f){ toast('Escolha uma imagem ou PDF para anexar.'); return; }
+  if(!respostaAtual) return;
+  const legenda = g('rTexto').value.trim();
+  const btn = g('rBtnAnexo');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  try{
+    const base64 = await lerArquivoBase64(f);
+    const r = await fetch(`${SU}/functions/v1/enviar-arquivo`,{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-access-key': TRIAGEM_ACCESS_KEY },
+      body: JSON.stringify({
+        telefone: respostaAtual.telefone,
+        demanda_id: respostaAtual.id,
+        arquivo_base64: base64,
+        nome_arquivo: f.name,
+        mime: f.type,
+        legenda: legenda || undefined
+      })
+    });
+    const j = await r.json();
+    if(!r.ok || j.erro) throw new Error(j.erro || 'Erro ao enviar arquivo');
+    toast('✅ Arquivo enviado!');
+    RESPONDIDOS.add(respostaAtual.id); renderAudios();
+    fecharResposta();
+    if(document.getElementById('mBg')?.classList.contains('open')) abrirD(respostaAtual.id);
+  }catch(ex){
+    toast('Erro: '+ex.message);
+  }finally{
+    btn.disabled = false; btn.textContent = '📎 Anexar imagem/PDF';
+  }
+}
 
 async function enviarRespostaAudio(){
   const texto = g('rTexto').value.trim();
