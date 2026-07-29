@@ -228,6 +228,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       </div>
       <div style="margin-top:14px"><button class="bp" onclick="salvarA()">💾 Cadastrar aluno</button></div>
     </div>
+    <div class="toolbar"><input type="text" id="aBusca" placeholder="Buscar por nome ou turma..." oninput="renderA()"></div>
     <div id="listaA"><div class="loading">Carregando...</div></div>
   </section>
 
@@ -696,9 +697,12 @@ async function salvarA(){
   try{await db('alunos','POST',a);toast('✅ Aluno cadastrado!');['aNm','aTm','aMt','aRN','aRT'].forEach(id=>g(id).value='');await loadA();}catch(ex){toast('Erro: '+ex.message);}
 }
 function renderA(){
-  const cont=g('listaA');if(!AA.length){cont.innerHTML='<div class="empty">👨‍🎓 Nenhum aluno.</div>';return;}
+  const cont=g('listaA');
+  const q=(g('aBusca')?g('aBusca').value:'').toLowerCase().trim();
+  const lista=q?AA.filter(a=>a.nome.toLowerCase().includes(q)||(a.turma||'').toLowerCase().includes(q)):AA;
+  if(!lista.length){cont.innerHTML=`<div class="empty">👨‍🎓 ${q?'Nenhum resultado para "'+e(q)+'".':'Nenhum aluno.'}</div>`;return;}
   cont.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">`+
-    AA.map(a=>`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:12px;box-shadow:0 1px 4px var(--shadow)">
+    lista.map(a=>`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:12px;box-shadow:0 1px 4px var(--shadow)">
       <div style="font-weight:700">${e(a.nome)}</div>
       <div style="font-size:.8rem;color:#778;margin-top:2px">${e(a.turma||'')} · ${e(a.turno||'')}${a.matricula?' · Matr: '+e(a.matricula):''}</div>
       ${a.responsavel_nome?`<div style="font-size:.8rem;margin-top:4px">👤 ${e(a.responsavel_nome)}${a.responsavel_telefone?' · '+e(a.responsavel_telefone):''}</div>`:''}</div>`).join('')+'</div>';
