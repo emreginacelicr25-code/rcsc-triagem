@@ -129,6 +129,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
     <button class="tab" data-v="alunos" onclick="aba(this)">👨‍🎓 Alunos</button>
     <button class="tab" data-v="professores" onclick="aba(this)">👨‍🏫 Professores</button>
     <button class="tab" data-v="etp" onclick="aba(this)">🛟 ETP</button>
+    <button class="tab" data-v="broadcast" onclick="aba(this)">📢 Comunicados</button>
     <button class="tab" data-v="audios" onclick="aba(this)">🎤 Áudios pendentes</button>
     <button class="tab" data-v="importar" onclick="aba(this)">📲 Importar WhatsApp</button>
     <button class="tab" data-v="automaticas" onclick="aba(this)">📢 Mensagens automáticas</button>
@@ -270,6 +271,73 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       </div>
     </div>
     <div id="listaEtp"><div class="loading">Carregando...</div></div>
+  </section>
+
+  <!-- COMUNICADOS (BROADCAST INSTITUCIONAL) -->
+  <section class="view" id="view-broadcast">
+    <div class="fcard">
+      <h3>📢 Enviar comunicado institucional</h3>
+      <p style="font-size:.85rem;color:#556;margin-top:-8px">
+        Envie avisos, artes de divulgação ou documentos para os responsáveis pelo WhatsApp, usando os modelos aprovados pela Meta.
+      </p>
+
+      <div class="fg">
+        <div class="f">
+          <label>Tipo de comunicado</label>
+          <select id="bcTemplate" onchange="bcAtualizarCampos()">
+            <option value="comunicado_texto">Somente texto (avisos administrativos)</option>
+            <option value="comunicado_imagem">Com imagem (convites, cartazes de eventos)</option>
+            <option value="comunicado_pdf">Com PDF (circulares, ofícios, documentos)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="f" style="margin-top:10px">
+        <label>Mensagem</label>
+        <textarea id="bcMensagem" rows="4" placeholder="Digite o conteúdo do comunicado..." style="width:100%;padding:12px;border:1.5px solid var(--line);border-radius:8px;font:inherit;font-size:.92rem"></textarea>
+      </div>
+
+      <div class="f" id="bcCampoArquivo" style="margin-top:10px;display:none">
+        <label id="bcLabelArquivo">Anexar imagem</label>
+        <input type="file" id="bcArquivo" accept="image/png,image/jpeg,image/webp" onchange="bcArquivoSelecionado()">
+        <div id="bcArquivoPreview" style="margin-top:6px;font-size:.82rem;color:#556"></div>
+      </div>
+
+      <div class="f" style="margin-top:16px">
+        <label>Público</label>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;font-size:.9rem">
+          <label style="display:flex;align-items:center;gap:6px;font-weight:400"><input type="radio" name="bcPublico" value="telefone" checked onchange="bcAtualizarPublico()"> Um responsável</label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:400"><input type="radio" name="bcPublico" value="turma" onchange="bcAtualizarPublico()"> Uma turma</label>
+          <label style="display:flex;align-items:center;gap:6px;font-weight:400"><input type="radio" name="bcPublico" value="todas" onchange="bcAtualizarPublico()"> Todas as turmas</label>
+        </div>
+      </div>
+
+      <div class="f" id="bcCampoTelefone" style="margin-top:10px;position:relative">
+        <label>Buscar aluno (define o responsável)</label>
+        <input type="text" id="bcBuscaAluno" placeholder="Digite o nome do aluno..." oninput="bcBuscarAluno(this.value)" autocomplete="off">
+        <div id="bcSugAluno" style="position:absolute;z-index:10;width:100%"></div>
+        <div id="bcRespSelecionado" style="margin-top:6px;font-size:.85rem;color:#2a7"></div>
+      </div>
+
+      <div class="f" id="bcCampoTurma" style="margin-top:10px;display:none">
+        <label>Turma</label>
+        <select id="bcTurma"></select>
+      </div>
+
+      <div id="bcAvisoTodas" style="margin-top:10px;display:none;font-size:.85rem;color:#a60;background:#fff8e6;border:1px solid #f0d896;border-radius:8px;padding:10px 12px">
+        ⚠️ Isso vai enviar para <b>todos os responsáveis ativos da escola</b>. Confirme antes de disparar.
+      </div>
+
+      <div style="margin-top:16px">
+        <button class="bp" id="bcBtnEnviar" onclick="bcEnviar()">📤 Enviar comunicado</button>
+      </div>
+      <div id="bcResultado" style="margin-top:12px;font-size:.88rem"></div>
+    </div>
+
+    <div class="fcard" style="margin-top:16px">
+      <h3>🕓 Histórico de envios</h3>
+      <div id="listaBroadcasts"><div class="loading">Carregando...</div></div>
+    </div>
   </section>
 
   <!-- ÁUDIOS PENDENTES -->
@@ -1745,6 +1813,137 @@ async function enviarRespostaArquivo(){
   }
 }
 
+/* ===== COMUNICADOS (BROADCAST INSTITUCIONAL) ===== */
+let bcRespTelefone = null, bcRespNome = null;
+
+const BC_TEMPLATE_CFG = {
+  comunicado_texto:  { midia: null,       label: '' },
+  comunicado_imagem: { midia: 'image',    label: 'Anexar imagem' },
+  comunicado_pdf:    { midia: 'document', label: 'Anexar PDF' },
+};
+
+function bcAtualizarCampos(){
+  const t = g('bcTemplate').value;
+  const cfg = BC_TEMPLATE_CFG[t];
+  const campoArq = g('bcCampoArquivo');
+  if(cfg.midia){
+    campoArq.style.display = 'block';
+    g('bcLabelArquivo').textContent = cfg.label;
+    g('bcArquivo').accept = cfg.midia === 'image' ? 'image/png,image/jpeg,image/webp' : 'application/pdf';
+  } else {
+    campoArq.style.display = 'none';
+  }
+  g('bcArquivo').value = '';
+  g('bcArquivoPreview').innerHTML = '';
+}
+
+function bcAtualizarPublico(){
+  const tipo = document.querySelector('input[name="bcPublico"]:checked').value;
+  g('bcCampoTelefone').style.display = tipo === 'telefone' ? 'block' : 'none';
+  g('bcCampoTurma').style.display = tipo === 'turma' ? 'block' : 'none';
+  g('bcAvisoTodas').style.display = tipo === 'todas' ? 'block' : 'none';
+}
+
+function bcPopularTurmas(){
+  const sel = g('bcTurma');
+  const turmas = [...new Set(AA.map(a=>a.turma).filter(Boolean))].sort();
+  sel.innerHTML = turmas.map(t=>`<option value="${e(t)}">${e(t)}</option>`).join('');
+}
+
+function bcBuscarAluno(q){
+  const s = g('bcSugAluno');
+  if(q.length < 2){ s.innerHTML=''; return; }
+  const res = AA.filter(a=>a.nome.toLowerCase().includes(q.toLowerCase()) && a.responsavel_telefone).slice(0,5);
+  if(!res.length){ s.innerHTML='<div style="background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:.85rem;color:#778">Nenhum resultado com telefone cadastrado</div>'; return; }
+  s.innerHTML = `<div style="background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 12px var(--shadow)">`+
+    res.map(a=>`<div style="padding:8px 12px;cursor:pointer;font-size:.88rem" onclick="bcSelAluno('${a.id}')" onmouseover="this.style.background='#f0f7f5'" onmouseout="this.style.background=''">${e(a.nome)} <span style="color:#778">${e(a.turma||'')} · ${e(a.responsavel_nome||'')}</span></div>`).join('')+'</div>';
+}
+function bcSelAluno(id){
+  const a = AA.find(x=>x.id===id); if(!a) return;
+  bcRespTelefone = a.responsavel_telefone; bcRespNome = a.responsavel_nome || '';
+  g('bcBuscaAluno').value = a.nome;
+  g('bcSugAluno').innerHTML = '';
+  g('bcRespSelecionado').textContent = `✓ Responsável: ${a.responsavel_nome||'(sem nome)'} · ${a.responsavel_telefone}`;
+}
+
+function bcArquivoSelecionado(){
+  const input = g('bcArquivo');
+  const f = input.files && input.files[0];
+  const prev = g('bcArquivoPreview');
+  if(!f){ prev.innerHTML=''; return; }
+  prev.innerHTML = `📎 ${e(f.name)} (${(f.size/1024).toFixed(0)} KB)`;
+}
+
+async function bcEnviar(){
+  const template = g('bcTemplate').value;
+  const cfg = BC_TEMPLATE_CFG[template];
+  const mensagem = g('bcMensagem').value.trim();
+  if(!mensagem){ toast('Digite a mensagem do comunicado.'); return; }
+
+  let midia_base64, midia_mime, midia_nome;
+  if(cfg.midia){
+    const f = g('bcArquivo').files[0];
+    if(!f){ toast('Anexe o arquivo exigido por esse tipo de comunicado.'); return; }
+    midia_base64 = await lerArquivoBase64(f);
+    midia_mime = f.type; midia_nome = f.name;
+  }
+
+  const tipoPublico = document.querySelector('input[name="bcPublico"]:checked').value;
+  let publico;
+  if(tipoPublico === 'telefone'){
+    if(!bcRespTelefone){ toast('Busque e selecione um aluno para definir o responsável.'); return; }
+    publico = { tipo:'telefone', telefone: bcRespTelefone, nome: bcRespNome };
+  } else if(tipoPublico === 'turma'){
+    const turma = g('bcTurma').value;
+    if(!turma){ toast('Selecione uma turma.'); return; }
+    publico = { tipo:'turma', turma };
+  } else {
+    if(!confirm('Confirma o envio para TODOS os responsáveis ativos da escola?')) return;
+    publico = { tipo:'todas' };
+  }
+
+  const btn = g('bcBtnEnviar');
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  g('bcResultado').textContent = '';
+  try{
+    const r = await fetch(`${SU}/functions/v1/enviar-broadcast`,{
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-access-key': TRIAGEM_ACCESS_KEY },
+      body: JSON.stringify({ template, mensagem, midia_base64, midia_mime, midia_nome, publico, usuario: 'painel' })
+    });
+    const j = await r.json();
+    if(!r.ok || j.erro) throw new Error(j.erro || 'Erro ao enviar comunicado');
+    g('bcResultado').innerHTML = `<div style="color:#2a7">✅ Enviado para ${j.enviados} de ${j.total} responsável(is)${j.falhas?` · ⚠️ ${j.falhas} falha(s)`:''}</div>`;
+    toast('✅ Comunicado enviado!');
+    g('bcMensagem').value=''; g('bcArquivo').value=''; g('bcArquivoPreview').innerHTML='';
+    await loadBroadcasts();
+  }catch(ex){
+    g('bcResultado').innerHTML = `<div style="color:#c0392b">Erro: ${e(ex.message)}</div>`;
+  }finally{
+    btn.disabled = false; btn.textContent = '📤 Enviar comunicado';
+  }
+}
+
+async function loadBroadcasts(){
+  try{
+    const lista = await db('broadcasts_enviados','GET',null,'?order=criado_em.desc&limit=30');
+    const cont = g('listaBroadcasts');
+    if(!lista.length){ cont.innerHTML = '<div class="empty">Nenhum comunicado enviado ainda.</div>'; return; }
+    cont.innerHTML = lista.map(b=>`
+      <div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin-bottom:8px;box-shadow:0 1px 4px var(--shadow)">
+        <div style="display:flex;justify-content:space-between;font-size:.8rem;color:#778">
+          <span>${new Date(b.criado_em).toLocaleString('pt-BR')}</span>
+          <span>${e(b.template)}</span>
+        </div>
+        <div style="font-size:.9rem;margin-top:4px;white-space:pre-wrap">${e((b.mensagem||'').slice(0,200))}${(b.mensagem||'').length>200?'…':''}</div>
+        <div style="font-size:.8rem;margin-top:6px;color:#556">
+          Público: ${e(b.publico_tipo)}${b.publico_valor && b.publico_tipo!=='todas' ? ' · '+e(b.publico_valor):''}
+          · ✅ ${b.total_sucesso||0} enviados${b.total_falha?` · ⚠️ ${b.total_falha} falhas`:''}
+        </div>
+      </div>`).join('');
+  }catch(e){ g('listaBroadcasts').innerHTML = '<div class="empty">Erro ao carregar histórico.</div>'; }
+}
+
 async function enviarRespostaAudio(){
   const texto = g('rTexto').value.trim();
   if(!texto){ toast('Escreva ou escolha uma mensagem — ela será narrada e gravada.'); return; }
@@ -1854,6 +2053,7 @@ async function enviarResposta(){
 (async()=>{
   const now=new Date();g('fD').value=now.toISOString().slice(0,10);g('fH').value=now.toTimeString().slice(0,5);
   await loadD();await loadA();await loadP();await loadEtp();renderTemplates();carregarMiniCotas();
+  bcPopularTurmas();await loadBroadcasts();
 })();
 </script>
 
