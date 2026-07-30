@@ -705,7 +705,18 @@ function renderA(){
     lista.map(a=>`<div style="background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:12px;box-shadow:0 1px 4px var(--shadow)">
       <div style="font-weight:700">${e(a.nome)}</div>
       <div style="font-size:.8rem;color:#778;margin-top:2px">${e(a.turma||'')} · ${e(a.turno||'')}${a.matricula?' · Matr: '+e(a.matricula):''}</div>
-      ${a.responsavel_nome?`<div style="font-size:.8rem;margin-top:4px">👤 ${e(a.responsavel_nome)}${a.responsavel_telefone?' · '+e(a.responsavel_telefone):''}</div>`:''}</div>`).join('')+'</div>';
+      ${a.responsavel_nome?`<div style="font-size:.8rem;margin-top:4px">👤 ${e(a.responsavel_nome)}${a.responsavel_telefone?' · '+e(a.responsavel_telefone):''}</div>`:''}
+      <div style="margin-top:8px"><button class="sm bs" style="color:#c0392b;border-color:#e8b0a8" onclick="delA('${a.id}','${e(a.nome).replace(/'/g,"\\'")}')">🗑️ Excluir</button></div></div>`).join('')+'</div>';
+}
+async function delA(id,nome){
+  if(!confirm(`Excluir o cadastro de "${nome}"? Essa ação não pode ser desfeita.`))return;
+  try{
+    await db('alunos','DELETE',null,`?id=eq.${id}`);
+    AA=AA.filter(a=>a.id!==id);
+    renderA();
+    if(typeof bcPopularTurmas==='function')bcPopularTurmas();
+    toast('✅ Cadastro excluído.');
+  }catch(ex){toast('Erro: '+ex.message);}
 }
 function buscaA(q){
   const s=g('aluSug');if(q.length<2){s.innerHTML='';return;}
