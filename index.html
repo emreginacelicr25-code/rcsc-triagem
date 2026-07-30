@@ -1928,7 +1928,9 @@ async function bcEnviar(){
     });
     const j = await r.json();
     if(!r.ok || j.erro) throw new Error(j.erro || 'Erro ao enviar comunicado');
-    g('bcResultado').innerHTML = `<div style="color:#2a7">✅ Enviado para ${j.enviados} de ${j.total} responsável(is)${j.falhas?` · ⚠️ ${j.falhas} falha(s)`:''}</div>`;
+    const detalheErros = (j.erros && j.erros.length) ? `<div style="margin-top:6px;font-size:.78rem;color:#a33">`+
+      j.erros.map(er=>`⚠️ ${e(er.telefone)}: ${e(er.erro.slice(0,200))}`).join('<br>')+'</div>' : '';
+    g('bcResultado').innerHTML = `<div style="color:#2a7">✅ Enviado para ${j.enviados} de ${j.total} responsável(is)${j.falhas?` · ⚠️ ${j.falhas} falha(s)`:''}</div>${detalheErros}`;
     toast('✅ Comunicado enviado!');
     g('bcMensagem').value=''; g('bcArquivo').value=''; g('bcArquivoPreview').innerHTML='';
     await loadBroadcasts();
