@@ -171,6 +171,10 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
         <input type="checkbox" id="fOcultarImp" onchange="toggleImportadas()" style="cursor:pointer">
         Ocultar importadas
       </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:#556;white-space:nowrap;cursor:pointer;user-select:none">
+        <input type="checkbox" id="fHoje" onchange="toggleHoje()" style="cursor:pointer">
+        Somente hoje
+      </label>
       <button class="bs sm" onclick="loadD()">↺ Atualizar</button>
     </div>
     <div id="listaD"><div class="loading">Carregando...</div></div>
@@ -492,11 +496,15 @@ async function loadD(){
     await loadRespondidos();
     const chkImp=g('fOcultarImp');
     if(chkImp){const salvo=localStorage.getItem('ocultarImportadas');chkImp.checked=(salvo===null?true:salvo==='1');}
+    const chkHoje=g('fHoje');
+    if(chkHoje){chkHoje.checked=(localStorage.getItem('somenteHoje')==='1');}
     stats();renderD();renderAudios();catFiltro();
     g('stConn').textContent='● Online';g('stConn').style.cssText='background:#4ade80;color:#14532d';
   }catch(e){g('listaD').innerHTML=`<div class="empty">⚠️ Erro: ${e.message}</div>`;g('stConn').textContent='● Offline';}
 }
 function toggleImportadas(){localStorage.setItem('ocultarImportadas',g('fOcultarImp').checked?'1':'0');renderD();}
+function toggleHoje(){localStorage.setItem('somenteHoje',g('fHoje').checked?'1':'0');renderD();}
+function hojeStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 async function loadA(){try{AA=await db('alunos','GET',null,'?order=nome.asc&ativo=eq.true');renderA();}catch(e){g('listaA').innerHTML='<div class="empty">Erro: '+e.message+'</div>';}}
 
 function stats(){
@@ -511,8 +519,11 @@ function catFiltro(){const s=g('fCat'),cur=s.value,cats=[...new Set(DD.map(d=>d.
 function renderD(){
   const bu=g('busca').value.toLowerCase(),fu=g('fUrg').value,fs=g('fSt').value,fc=g('fCat').value,fe=g('fEtp')?g('fEtp').value:'';
   const ocultarImp=g('fOcultarImp')?g('fOcultarImp').checked:false;
+  const somenteHoje=g('fHoje')?g('fHoje').checked:false;
+  const hoje=hojeStr();
   let L=DD.filter(d=>{
     if(ocultarImp&&!d.telefone)return false;
+    if(somenteHoje&&(d.data_msg||d.criado_em?.slice(0,10))!==hoje)return false;
     if(fu&&d.urgencia!==fu)return false;if(fs&&d.status!==fs)return false;if(fc&&d.categoria!==fc)return false;
     if(fe==='any'&&!d.etp_nivel)return false;
     if((fe==='urgente'||fe==='atencao')&&d.etp_nivel!==fe)return false;
