@@ -751,11 +751,20 @@ function renderA(){
       </div></div>`).join('')+'</div>';
 }
 function fmtDtHr(iso){try{const d=new Date(iso);return d.toLocaleDateString('pt-BR')+' às '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}catch(ex){return iso;}}
+function waLink(numero,texto){
+  const t=texto?'&text='+encodeURIComponent(texto):'';
+  const tQ=texto?'?text='+encodeURIComponent(texto):'';
+  const isAndroid=/Android/i.test(navigator.userAgent);
+  if(isAndroid){
+    return `intent://send?phone=${numero}${t}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent('https://wa.me/'+numero+tQ)};end`;
+  }
+  return `https://wa.me/${numero}${tQ}`;
+}
 async function contatoDireto(id){
   const a=AA.find(x=>x.id===id);if(!a||!a.responsavel_telefone){toast('Sem telefone cadastrado.');return;}
   const numLimpo=a.responsavel_telefone.replace(/\D/g,'');
   const numCompleto=numLimpo.length<=11?'55'+numLimpo:numLimpo;
-  window.open(`https://wa.me/${numCompleto}`,'_blank');
+  window.location.href=waLink(numCompleto,'');
   const agora=new Date().toISOString();
   try{
     await db('alunos','PATCH',{ultimo_contato_direto:agora},`?id=eq.${id}`);
@@ -2229,11 +2238,11 @@ function eqAbrirEncaminhar(uid){
     <div style="display:grid;gap:10px">`+destinos.map(p=>{
       const numLimpo=(p.whatsapp||'').replace(/\D/g,'');
       const numCompleto=numLimpo.length<=11?'55'+numLimpo:numLimpo;
-      const wa=numLimpo?`https://wa.me/${numCompleto}?text=${encodeURIComponent(texto)}`:'';
+      const wa=numLimpo?waLink(numCompleto,texto):'';
       const mail=p.email?`mailto:${p.email}?subject=${encodeURIComponent('Registro de Equipe — '+origemLabel)}&body=${encodeURIComponent(texto)}`:'';
       return`<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:140px"><div style="font-weight:700">${e(p.nome)}</div><div style="font-size:.78rem;color:#778">${e(p.cargo)}</div></div>
-        ${wa?`<a class="bp sm" style="text-decoration:none" href="${wa}" target="_blank" rel="noopener">📱 WhatsApp</a>`:''}
+        ${wa?`<button class="bp sm" onclick="window.location.href='${wa.replace(/'/g,"\\'")}'">📱 WhatsApp</button>`:''}
         ${mail?`<a class="bs sm" style="text-decoration:none" href="${mail}">✉️ E-mail</a>`:''}
       </div>`;
     }).join('')+`</div>`;
