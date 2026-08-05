@@ -132,6 +132,7 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
     <button class="tab" data-v="professores" onclick="aba(this)">👨‍🏫 Professores</button>
     <button class="tab" data-v="etp" onclick="aba(this)">🛟 ETP</button>
     <button class="tab" data-v="broadcast" onclick="aba(this)">📢 Comunicados</button>
+    <button class="tab" data-v="equipe" onclick="aba(this);loadEquipe()">🗂️ Registros de Equipe</button>
     <button class="tab" data-v="audios" onclick="aba(this)">🎤 Áudios pendentes</button>
     <button class="tab" data-v="importar" onclick="aba(this)">📲 Importar WhatsApp</button>
     <button class="tab" data-v="automaticas" onclick="aba(this)">📢 Mensagens automáticas</button>
@@ -345,6 +346,30 @@ button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16p
       <h3>🕓 Histórico de envios</h3>
       <div id="listaBroadcasts"><div class="loading">Carregando...</div></div>
     </div>
+  </section>
+
+  <!-- REGISTROS DE EQUIPE (consolidado: Inclusão / Transporte / Limpeza) -->
+  <section class="view" id="view-equipe">
+    <div class="fcard" style="padding:14px 20px">
+      <div class="usel" id="eqSubtabs" style="margin-bottom:10px">
+        <button class="ubtn baixa sel" data-sub="todos" onclick="eqSub('todos',this)">📋 Todos</button>
+        <button class="ubtn baixa" data-sub="inclusao" onclick="eqSub('inclusao',this)">🧩 Inclusão</button>
+        <button class="ubtn baixa" data-sub="transporte" onclick="eqSub('transporte',this)">🚐 Transporte</button>
+        <button class="ubtn baixa" data-sub="limpeza" onclick="eqSub('limpeza',this)">🧹 Limpeza</button>
+      </div>
+      <div class="toolbar" style="margin-bottom:0">
+        <select id="eqFSev" onchange="renderEquipe()">
+          <option value="">Todas as severidades</option>
+          <option value="alta">🔴 Alta / Grave</option>
+          <option value="media">🟡 Média</option>
+          <option value="baixa">🟢 Baixa / Leve</option>
+        </select>
+        <input type="date" id="eqFData" onchange="renderEquipe()">
+        <button class="bs sm" onclick="g('eqFSev').value='';g('eqFData').value='';renderEquipe()">✕ Limpar filtros</button>
+        <button class="bs sm" style="margin-left:auto" onclick="loadEquipe()">🔄 Atualizar</button>
+      </div>
+    </div>
+    <div id="listaEquipe"><div class="loading">Carregando...</div></div>
   </section>
 
   <!-- ÁUDIOS PENDENTES -->
@@ -2082,6 +2107,119 @@ async function enviarResposta(){
   }finally{
     btn.disabled = false; btn.textContent = '📤 Enviar';
   }
+}
+
+/* ================================================================
+   REGISTROS DE EQUIPE — consolida Inclusão (projeto rcsc-inclusao),
+   Transporte e Limpeza (mesmo projeto do triagem) numa única aba.
+================================================================ */
+const INC_SU='https://vjxsvcohipeyepfbkmro.supabase.co';
+const INC_SK='sb_publishable_gn6TBJ888I6cT137tPc3DA_-Biu4ipo';
+const DIRECAO_CONTATO={nome:'Mário Júnior da Silva Martins',cargo:'Direção Escolar',whatsapp:'21990779685',email:'p2.mariomartins@smeduquedecaxias.rj.gov.br'};
+const EQ_ORIGEM_LABEL={inclusao:'🧩 Inclusão',transporte:'🚐 Transporte',limpeza:'🧹 Limpeza'};
+let EQ_ALL=[],EQ_SUB='todos',EQ_LOADED=false;
+
+async function incDb(tab){
+  const r=await fetch(`${INC_SU}/rest/v1/${tab}?select=*&order=data.desc`,{headers:{'apikey':INC_SK,'Authorization':'Bearer '+INC_SK}});
+  if(!r.ok)throw new Error(await r.text());
+  return r.json();
+}
+function eqNormSev(v){
+  v=String(v||'').toLowerCase();
+  if(v==='grave'||v==='alta')return'alta';
+  if(v==='leve'||v==='baixa')return'baixa';
+  return'media';
+}
+async function loadEquipe(){
+  if(EQ_LOADED){renderEquipe();return;}
+  g('listaEquipe').innerHTML='<div class="loading">Carregando...</div>';
+  try{
+    const[incReg,incOco,trMon,trSec,trResp,lim]=await Promise.all([
+      incDb('registros').catch(()=>[]),incDb('ocorrencias').catch(()=>[]),
+      db('transporte_registros_monitor').catch(()=>[]),db('transporte_registros_sec').catch(()=>[]),
+      db('transporte_registros_resp').catch(()=>[]),db('limpeza_ocorrencias').catch(()=>[])
+    ]);
+    EQ_ALL=[
+      ...incReg.map(r=>({uid:'inc-reg-'+r.id,origem:'inclusao',sub:'Rotina diária',data:r.data,hora:r.hor_saida||'',pessoa:r.prof_nome,aluno:r.aluno,severidade:r.crise?'alta':'media',descricao:[r.humor?('Humor: '+r.humor):'',r.crise_desc,r.obs].filter(Boolean).join(' — ')||'(sem observações)'})),
+      ...incOco.map(r=>({uid:'inc-oco-'+r.id,origem:'inclusao',sub:'Ocorrência',data:r.data,hora:r.hora_ini||'',pessoa:r.prof_nome,aluno:r.aluno,severidade:'media',descricao:r.relato||r.nat_outro||'(sem relato)'})),
+      ...trMon.map(r=>({uid:'tr-mon-'+r.id,origem:'transporte',sub:'Monitor',data:r.data,hora:r.hora,pessoa:r.monitor,aluno:r.alunos,severidade:eqNormSev(r.severidade),descricao:r.descricao||r.natureza_label||'(sem descrição)'})),
+      ...trSec.map(r=>({uid:'tr-sec-'+r.id,origem:'transporte',sub:'Secretaria',data:r.data,hora:r.hora,pessoa:r.profissional,aluno:r.n_alunos?(r.n_alunos+' aluno(s)'):'',severidade:eqNormSev(r.severidade),descricao:r.descricao||'(sem descrição)'})),
+      ...trResp.map(r=>({uid:'tr-resp-'+r.id,origem:'transporte',sub:'Responsável',data:r.data,hora:r.hora,pessoa:r.responsavel,aluno:r.aluno,severidade:eqNormSev(r.severidade),descricao:r.relato||'(sem relato)'})),
+      ...lim.map(r=>({uid:'lim-'+r.id,origem:'limpeza',sub:'Limpeza',data:r.data,hora:'',pessoa:r.asg_nome,aluno:r.ambiente,severidade:eqNormSev(r.tipo),descricao:r.descricao||'(sem descrição)'}))
+    ];
+    EQ_LOADED=true;
+    renderEquipe();
+  }catch(ex){
+    g('listaEquipe').innerHTML='<div class="empty">Erro ao carregar: '+e(ex.message)+'</div>';
+  }
+}
+function eqSub(sub,btn){
+  EQ_SUB=sub;
+  document.querySelectorAll('#eqSubtabs .ubtn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  renderEquipe();
+}
+function renderEquipe(){
+  const fs=g('eqFSev')?g('eqFSev').value:'',fd=g('eqFData')?g('eqFData').value:'';
+  let L=EQ_ALL.filter(d=>{
+    if(EQ_SUB!=='todos'&&d.origem!==EQ_SUB)return false;
+    if(fs&&d.severidade!==fs)return false;
+    if(fd&&d.data!==fd)return false;
+    return true;
+  });
+  L.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  const cont=g('listaEquipe');
+  if(!L.length){cont.innerHTML='<div class="empty">📭 Nenhum registro encontrado.</div>';return;}
+  cont.innerHTML=L.map(d=>`<div class="card ${d.severidade}">
+    <div class="ch"><div><div class="ca">${e(d.pessoa||'—')}</div><div class="cw">${e(d.data||'')} ${e(d.hora||'')} · ${e(d.sub)}</div></div>
+    <div class="chips"><span class="chip cat">${EQ_ORIGEM_LABEL[d.origem]||d.origem}</span><span class="chip ${d.severidade}">${d.severidade==='alta'?'🔴 Alta':d.severidade==='media'?'🟡 Média':'🟢 Baixa'}</span></div></div>
+    ${d.aluno?`<div style="font-size:.8rem;color:var(--verde2);font-weight:600;margin-bottom:5px">👤 ${e(d.aluno)}</div>`:''}
+    <div class="ctxt" onclick="this.classList.toggle('exp')">${e(d.descricao)}</div>
+    <div class="cact">
+      <button class="bp sm" onclick="eqGerarDoc('${d.uid}')">📄 Gerar / imprimir</button>
+      <button class="bs sm" onclick="eqAbrirEncaminhar('${d.uid}')">📤 Encaminhar</button>
+    </div></div>`).join('');
+}
+function eqGerarDoc(uid){
+  const d=EQ_ALL.find(x=>x.uid===uid);if(!d)return;
+  const origemLabel={inclusao:'Inclusão',transporte:'Transporte Escolar',limpeza:'Limpeza'}[d.origem]||d.origem;
+  const ti='Registro de Equipe — '+origemLabel;
+  const ht=cab('______')+`<h2>Registro de Equipe — ${e(origemLabel)}</h2><div class="dsub">${e(d.sub)}</div>
+  ${sec('I — Identificação')}
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">${camp('Data',e(d.data||''))}${camp('Hora',e(d.hora||''))}${camp('Profissional/Responsável',e(d.pessoa||''))}</div>
+  ${d.aluno?`<div style="display:grid;grid-template-columns:1fr;gap:10px">${camp('Aluno / Turma / Ambiente',e(d.aluno))}</div>`:''}
+  ${sec('II — Descrição')}${camp('Relato',e(d.descricao||''),true)}
+  ${sec('III — Encaminhamentos')}${camp('Providências adotadas','',true)}
+  ${sec('IV — Assinaturas')}${ass([{n:'Mário Júnior da Silva Martins',c:'Direção Escolar'},{n:'Liliam Rangel',c:'Orientação Pedagógica'},{n:'Elaine Gomes da Silva',c:'Orientação Educacional'},{n:'',c:'Responsável / Familiar'}])}
+  `+rod();
+  g('mTit').textContent=ti;
+  g('mBody').innerHTML=`<div class="ebar" style="background:#eef3f0;padding:8px 16px;margin:-20px -20px 16px;font-size:.82rem;color:#2a4f45;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <strong>✏️ Editável</strong> — toque em qualquer campo para digitar
+    <button class="bs sm" style="margin-left:auto" onclick="eqGerarDoc('${uid}')">↺ Resetar</button>
+  </div><div class="dp" id="docP">${ht}</div>`;
+  g('mFoot').innerHTML=`<button class="bs" onclick="fecharM()">Fechar</button><button class="bp" onclick="imprimirFicha()">🖨 Imprimir / PDF</button>`;
+  g('mBg').classList.add('open');
+}
+function eqAbrirEncaminhar(uid){
+  const d=EQ_ALL.find(x=>x.uid===uid);if(!d)return;
+  const origemLabel={inclusao:'Inclusão',transporte:'Transporte Escolar',limpeza:'Limpeza'}[d.origem]||d.origem;
+  const texto=`*Registro de Equipe — ${origemLabel}*\n${d.sub}\nData: ${d.data||''} ${d.hora||''}\nProfissional/Responsável: ${d.pessoa||'-'}\n${d.aluno?('Aluno/Turma/Ambiente: '+d.aluno+'\n'):''}Relato: ${d.descricao||''}\n\n— Enviado via Central de Triagem, E.M. Regina Celi da Silva Cerdeira`;
+  const destinos=[DIRECAO_CONTATO].concat((ETP||[]).filter(c=>c.ativo).map(c=>({nome:c.nome,cargo:c.cargo||'ETP',whatsapp:c.whatsapp,email:c.email})));
+  g('mTit').textContent='📤 Encaminhar registro';
+  g('mBody').innerHTML=`<p style="font-size:.85rem;color:#556;margin-bottom:14px">Escolha o destinatário — o texto do registro já vai pronto na mensagem.</p>
+    <div style="display:grid;gap:10px">`+destinos.map(p=>{
+      const numLimpo=(p.whatsapp||'').replace(/\D/g,'');
+      const numCompleto=numLimpo.length<=11?'55'+numLimpo:numLimpo;
+      const wa=numLimpo?`https://wa.me/${numCompleto}?text=${encodeURIComponent(texto)}`:'';
+      const mail=p.email?`mailto:${p.email}?subject=${encodeURIComponent('Registro de Equipe — '+origemLabel)}&body=${encodeURIComponent(texto)}`:'';
+      return`<div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:140px"><div style="font-weight:700">${e(p.nome)}</div><div style="font-size:.78rem;color:#778">${e(p.cargo)}</div></div>
+        ${wa?`<a class="bp sm" style="text-decoration:none" href="${wa}" target="_blank" rel="noopener">📱 WhatsApp</a>`:''}
+        ${mail?`<a class="bs sm" style="text-decoration:none" href="${mail}">✉️ E-mail</a>`:''}
+      </div>`;
+    }).join('')+`</div>`;
+  g('mFoot').innerHTML=`<button class="bs" onclick="fecharM()">Fechar</button>`;
+  g('mBg').classList.add('open');
 }
 
 (async()=>{
